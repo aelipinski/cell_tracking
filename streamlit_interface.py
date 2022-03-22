@@ -50,10 +50,18 @@ def test_all_points(spots_array, all_coefs):
     point_indices = np.all(sideA, axis=1) + np.all(sideB, axis=1)
     return point_indices
 
+def initialize_session_state():
+    st.session_state['count'] = 1
+    st.session_state['groups'] = dict()
+    st.session_state['group_stats'] = pd.DataFrame(columns=["Group ID", "Group Name", "Number of Tracks"])
+    st.session_state['selections'] = dict.fromkeys(['im','draw'])
+    st.session_state.selections['im'] = Image.new('RGB', (800, int(img_height/scale_factor)), (240, 242, 246))
+    st.session_state.selections['draw'] = ImageDraw.Draw(st.session_state.selections['im'])
+
 # ----------------------------------- LAYOUT -----------------------------------
 
 # Title and header
-st.sidebar.title("TrackMate Annotation")
+st.sidebar.title("TrackMate Analysis")
 
 # Add CSV uploaders for spots and tracking data and image uploader to the sidebar within expander 
 with st.sidebar.expander('Load Data'):
@@ -95,21 +103,14 @@ if spots_data and track_data and bg_image:
     with st.sidebar.expander("Group Options"):
         poly_create = st.radio("Drawing Mode", ("Include","Exclude"))  
         group_name = st.text_input("Group Name", help="Add name for group")
+        show_stats = st.checkbox('Show Group Stats',False)
         if st.button('Clear Groups'):
-            st.session_state['count'] = 1
-            st.session_state['groups'] = dict()
-            st.session_state['selections'] = dict.fromkeys(['im','draw'])
-            st.session_state.selections['im'] = Image.new('RGB', (800, int(img_height/scale_factor)), (240, 242, 246))
-            st.session_state.selections['draw'] = ImageDraw.Draw(st.session_state.selections['im'])
+            initialize_session_state()
 
     # Initialize session state variables for iterative group creation
     # This prevents the groups from being deleted with each Streamlit run 
     if 'count' not in st.session_state:
-        st.session_state['count'] = 1
-        st.session_state['groups'] = dict()
-        st.session_state['selections'] = dict.fromkeys(['im','draw'])
-        st.session_state.selections['im'] = Image.new('RGB', (800, int(img_height/scale_factor)), (240, 242, 246))
-        st.session_state.selections['draw'] = ImageDraw.Draw(st.session_state.selections['im'])
+        initialize_session_state()
 
     # Convert CSV filts to dataframes 
     spots_df, spots_array = process_spots_data(spots_data)
@@ -173,6 +174,7 @@ if spots_data and track_data and bg_image:
         color = output_colors[(group_id-1) % len(output_colors)]
         st.session_state.groups[group_id]['color'] = color
         st.session_state.selections['draw'].point(coords, fill=color)
+        st.session_state.group_stats.loc[group_id-1] = [group_id, group_name, len(track_set)]
 
         # Increment the group ID
         st.session_state.count += 1
@@ -193,13 +195,14 @@ if bg_image:
         draw_single = ImageDraw.Draw(im_single)
         draw_single.point(st.session_state.groups[output_groups]['points'], fill = st.session_state.groups[output_groups]['color'])
         st.image(im_single)
-    # st.write(st.session_state.groups)
-    # st.write(st.session_state['groups']["1"])
+
+    if len(st.session_state['groups']) > 0 and show_stats:
+        st.write('### Group Stats')
+        st.dataframe(st.session_state.group_stats)
+
 
 # NOTES:
 # 1) Add convexity checker
 # 6) Add export tracks button in dedicated expander ***
-# 7) Add metadata fields in dedicated expander 
-# 8) Relocate 'Clear Groups' Button 
+# 7) Add metadata fields in dedicated expander or make it flexible
 # 10) Display Group metrics (number of tracks in group, aggregage stats, etc) ***
-# 11) Flexible Video Metadata 
