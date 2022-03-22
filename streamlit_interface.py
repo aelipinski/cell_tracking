@@ -8,20 +8,7 @@ import time
 # Sets the streamlit from the default narrow layout to the full width
 st.set_page_config(layout="wide")
 
-# Title and header
-st.title("Tracking Data Labelling")
-st.write("Annotate TrackMate tracking data with run information and track group labels")
-
-# Add CSV uploaders for spots and tracking data and image uploader to the sidebar within expander 
-with st.sidebar.expander('Load Data'):
-    spots_data = st.file_uploader("Spots Data from TrackMate",type='csv',accept_multiple_files=False, \
-        help="Data must be a CSV file exported from TrackMate for the 'Spots'.")
-
-    track_data = st.file_uploader("Track Data from Trackmate ",type='csv',accept_multiple_files=False, \
-        help="Data must be a CSV file exported from TrackMate for the 'Tracks'.")    
-
-    bg_image = st.file_uploader("Background Composite Image:", type=["png", "jpg"], accept_multiple_files=False, \
-        help="Data should be an image from TrackMate showing all tracks overlapping a background video frame.")    
+# ----------------------------------- FUNCTIONS -----------------------------------
 
 # Functions to clean up TrackMate CSVs and convert to dataframes
 @st.experimental_memo
@@ -38,6 +25,51 @@ def process_track_data(track_data):
     track_df = track_df.drop([0,1,2])
     track_df = track_df.reset_index()
     return track_df
+
+# Finds line coefficients for each polygon edge
+def line_solver(x0, y0, x1, y1):
+    a = float(y1 - y0)
+    b = float(x0 - x1)
+    c = - a*x0 - b*y0
+    return np.array([a,b,c])
+
+# Finds all line coeffcients for all edges in all polygons 
+def get_edge_coefs(canvas_objects):
+    num_poly = len(canvas_objects)
+    poly_array = {}
+    for i in range(num_poly):
+        poly = canvas_result.json_data["objects"][i]["path"]
+        num_vert = len(poly) - 1 
+        coef_mat = np.zeros((3,num_vert))
+        for edge in range(num_vert):
+            coef_mat[:,edge] = line_solver(poly[edge][1], poly[edge][2], poly[(edge + 1) % num_vert][1], poly[(edge + 1) % num_vert][2])
+        poly_array[i] = coef_mat
+    return poly_array
+
+# Checks all spots and determines if they fall inside a given polygon (must be a convex polygon!)
+def test_all_points(spots_array, all_coefs):
+    prod_mat = spots_array @ all_coefs[:2,:] + all_coefs[2,:] 
+    sideA = prod_mat<=0
+    sideB = ~sideA
+    point_indices = np.all(sideA, axis=1) + np.all(sideB, axis=1)
+    return point_indices
+
+# ----------------------------------- LAYOUT -----------------------------------
+
+# Title and header
+st.title("Tracking Data Labelling")
+st.write("Annotate TrackMate tracking data with run information and track group labels")
+
+# Add CSV uploaders for spots and tracking data and image uploader to the sidebar within expander 
+with st.sidebar.expander('Load Data'):
+    spots_data = st.file_uploader("Spots Data from TrackMate",type='csv',accept_multiple_files=False, \
+        help="Data must be a CSV file exported from TrackMate for the 'Spots'.")
+
+    track_data = st.file_uploader("Track Data from Trackmate ",type='csv',accept_multiple_files=False, \
+        help="Data must be a CSV file exported from TrackMate for the 'Tracks'.")    
+
+    bg_image = st.file_uploader("Background Composite Image:", type=["png", "jpg"], accept_multiple_files=False, \
+        help="Data should be an image from TrackMate showing all tracks overlapping a background video frame.")  
 
 # Specify canvas parameters in application
 poly_create = st.sidebar.radio("Drawing tool:", ("Include","Exclude"))
@@ -69,37 +101,6 @@ if spots_data and track_data and bg_image:
         key="canvas",
     )
 
-# if canvas_result.image_data is not None:
-#     st.image(canvas_result.image_data)
-
-# Finds line coefficients for each polygon edge
-def line_solver(x0, y0, x1, y1):
-    a = float(y1 - y0)
-    b = float(x0 - x1)
-    c = - a*x0 - b*y0
-    return np.array([a,b,c])
-
-# Finds all line coeffcients for all edges in all polygons 
-def get_edge_coefs(canvas_objects):
-    num_poly = len(canvas_objects)
-    poly_array = {}
-    for i in range(num_poly):
-        poly = canvas_result.json_data["objects"][i]["path"]
-        num_vert = len(poly) - 1 
-        coef_mat = np.zeros((3,num_vert))
-        for edge in range(num_vert):
-            coef_mat[:,edge] = line_solver(poly[edge][1], poly[edge][2], poly[(edge + 1) % num_vert][1], poly[(edge + 1) % num_vert][2])
-        poly_array[i] = coef_mat
-    return poly_array
-
-# Checks all spots and determines if they fall inside a given polygon (must be a convex polygon!)
-def test_all_points(spots_array, all_coefs):
-    prod_mat = spots_array @ all_coefs[:2,:] + all_coefs[2,:] 
-    sideA = prod_mat<=0
-    sideB = ~sideA
-    point_indices = np.all(sideA, axis=1) + np.all(sideB, axis=1)
-    return point_indices
-
 # Initialize session state variables for iterative group creation
 # This prevents the groups from being deleted with each Streamlit run 
 if 'count' not in st.session_state:
@@ -121,7 +122,7 @@ if st.sidebar.button('Create Group'):
     neg_set = set()
 
     # Iterate through all polygons and keep track of track IDs to add or subtract 
-    tic = time.perf_counter()
+    # tic = time.perf_counter()
     for poly in range(num_poly):
 
         # returns index values of points included within polygon
@@ -152,7 +153,7 @@ if st.sidebar.button('Create Group'):
     color = tuple(np.random.randint(150,255,3))
     st.session_state.selections['draw'].point(coords, fill=color)
 
-    toc = time.perf_counter()
+    # toc = time.perf_counter()
     # st.write(toc - tic, "seconds")
 
 # Draw Output if background image is loaded 
