@@ -100,10 +100,9 @@ if spots_data and track_data and bg_image:
     scale_factor = img_width/800
 
     # Specify canvas parameters in application
-    with st.sidebar.expander("Group Options"):
-        poly_create = st.radio("Drawing Mode", ("Include","Exclude"))  
+    with st.sidebar.expander("Drawing Options"):
+        poly_create = st.radio("Mode", ("Include","Exclude"))  
         group_name = st.text_input("Group Name", help="Add name for group")
-        show_stats = st.checkbox('Show Group Stats',False)
         if st.button('Clear Groups'):
             initialize_session_state()
 
@@ -179,10 +178,14 @@ if spots_data and track_data and bg_image:
         # Increment the group ID
         st.session_state.count += 1
 
-    with st.sidebar.expander("Output Options"):
+    with st.sidebar.expander("Display Settings"):
+        show_stats = st.checkbox('Show Group Stats',False)
         items = list(st.session_state.groups.keys())
         output_options = ['All'] + items
         output_groups = st.selectbox("Select Group to Display",output_options)
+
+    if st.sidebar.button('Export'):
+        pass    
 
 # Draw Output if background image is loaded 
 if bg_image:
@@ -200,9 +203,8 @@ if bg_image:
         st.write('### Group Stats')
         st.dataframe(st.session_state.group_stats)
 
-
 # NOTES:
-# 1) Add convexity checker
-# 6) Add export tracks button in dedicated expander ***
-# 7) Add metadata fields in dedicated expander or make it flexible
-# 10) Display Group metrics (number of tracks in group, aggregage stats, etc) ***
+# Add convexity checker
+# Add export tracks button in dedicated expander ***
+# Add metadata fields in dedicated expander or make it flexible
+# Display Group metrics (number of tracks in group, aggregage stats, etc) 
