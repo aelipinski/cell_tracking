@@ -56,23 +56,44 @@ def test_all_points(spots_array, all_coefs):
 
 # ----------------------------------- LAYOUT -----------------------------------
 
+# Initialize session state variables for iterative group creation
+# This prevents the groups from being deleted with each Streamlit run 
+if 'count' not in st.session_state:
+    st.session_state['count'] = 1
+    st.session_state['groups'] = dict()
+    st.session_state['selections'] = dict.fromkeys(['im','draw'])
+    st.session_state.selections['im'] = Image.new('RGB', (1504, 352), (0,0,0))
+    st.session_state.selections['draw'] = ImageDraw.Draw(st.session_state.selections['im'])
+
 # Title and header
 st.title("Tracking Data Labelling")
 st.write("Annotate TrackMate tracking data with run information and track group labels")
 
 # Add CSV uploaders for spots and tracking data and image uploader to the sidebar within expander 
 with st.sidebar.expander('Load Data'):
-    spots_data = st.file_uploader("Spots Data from TrackMate",type='csv',accept_multiple_files=False, \
-        help="Data must be a CSV file exported from TrackMate for the 'Spots'.")
+    if st.checkbox('Demo Mode'):
+        spots_data = "spots.csv"
+        track_data = "tracks.csv"
+        bg_image = "bg1.png"
+    else:
+        spots_data = st.file_uploader("Spots Data from TrackMate",type='csv',accept_multiple_files=False, \
+            help="Data must be a CSV file exported from TrackMate for the 'Spots'.")
 
-    track_data = st.file_uploader("Track Data from Trackmate ",type='csv',accept_multiple_files=False, \
-        help="Data must be a CSV file exported from TrackMate for the 'Tracks'.")    
+        track_data = st.file_uploader("Track Data from Trackmate ",type='csv',accept_multiple_files=False, \
+            help="Data must be a CSV file exported from TrackMate for the 'Tracks'.")    
 
-    bg_image = st.file_uploader("Background Composite Image:", type=["png", "jpg"], accept_multiple_files=False, \
-        help="Data should be an image from TrackMate showing all tracks overlapping a background video frame.")  
+        bg_image = st.file_uploader("Background Composite Image:", type=["png", "jpg"], accept_multiple_files=False, \
+            help="Data should be an image from TrackMate showing all tracks overlapping a background video frame.")  
+
+with st.sidebar.expander('Video Metadata'):
+    ridge_spacing = st.text_input("Ridge Spacing")
+    ridge_angle = st.text_input("Ridge Angle")
+    flowrate = st.text_input("Fluid Flowrate")
 
 # Specify canvas parameters in application
-poly_create = st.sidebar.radio("Drawing tool:", ("Include","Exclude"))
+with st.sidebar.expander("Group Parameters"):
+    poly_create = st.radio("Drawing Mode", ("Include","Exclude"))  
+    group_name = st.text_input("Group Name", help="Add name for group")
 
 # Dictionary to set fill and stroke colors for include and exlude polygon objects 
 poly_type = {"Include":["rgba(10, 255, 0, 0.3)","rgba(10, 255, 0, 1)"],\
@@ -101,74 +122,87 @@ if spots_data and track_data and bg_image:
         key="canvas",
     )
 
-# Initialize session state variables for iterative group creation
-# This prevents the groups from being deleted with each Streamlit run 
-if 'count' not in st.session_state:
-    st.session_state['count'] = 1
-    st.session_state['groups'] = dict()
-    st.session_state['selections'] = dict.fromkeys(['im','draw'])
-    st.session_state.selections['im'] = Image.new('RGB', (1504, 352), (0,0,0))
-    st.session_state.selections['draw'] = ImageDraw.Draw(st.session_state.selections['im'])
+    col1, col2 = st.columns([1,6])
 
-# Creates new group when button is clicked (checks points, add labels to corresponding tracks, draws output)
-if st.sidebar.button('Create Group'):
+    with col1:
+        # Creates new group when button is clicked (checks points, add labels to corresponding tracks, draws output)
+        if st.button('Create Group') and len(canvas_result.json_data["objects"]) > 0:
 
-    # Determine the number of polygons to check and get edge coefficients for each polygon 
-    num_poly = len(canvas_result.json_data["objects"])
-    edge_coefs = get_edge_coefs(canvas_result.json_data["objects"])
+            # Determine the number of polygons to check and get edge coefficients for each polygon 
+            num_poly = len(canvas_result.json_data["objects"])
+            edge_coefs = get_edge_coefs(canvas_result.json_data["objects"])
 
-    # Initialize positive and negative track sets 
-    track_set = set()
-    neg_set = set()
+            # Initialize positive and negative track sets 
+            track_set = set()
+            neg_set = set()
 
-    # Iterate through all polygons and keep track of track IDs to add or subtract 
-    # tic = time.perf_counter()
-    for poly in range(num_poly):
+            # Iterate through all polygons and keep track of track IDs to add or subtract 
+            # tic = time.perf_counter()
+            for poly in range(num_poly):
 
-        # returns index values of points included within polygon
-        point_indices = test_all_points(spots_array,edge_coefs[poly])
+                # returns index values of points included within polygon
+                point_indices = test_all_points(spots_array,edge_coefs[poly])
 
-        # retreive corresponding tracks for the bounded points
-        poly_set = set(spots_df["TRACK_ID"][point_indices])
+                # retreive corresponding tracks for the bounded points
+                poly_set = set(spots_df["TRACK_ID"][point_indices])
 
-        # Check if polygon is an include or exclude type by looking at it's color (red or green)
-        # Then add or remove track IDs depending on type
-        if canvas_result.json_data["objects"][poly]["fill"] == poly_type["Include"][0]:
-            track_set = track_set | poly_set
-        else:
-            neg_set = neg_set | poly_set
-    
-    # Create final track set by subtracting the negative set 
-    track_set = track_set - neg_set
+                # Check if polygon is an include or exclude type by looking at it's color (red or green)
+                # Then add or remove track IDs depending on type
+                if canvas_result.json_data["objects"][poly]["fill"] == poly_type["Include"][0]:
+                    track_set = track_set | poly_set
+                else:
+                    neg_set = neg_set | poly_set
+            
+            # Create final track set by subtracting the negative set 
+            track_set = track_set - neg_set
 
-    # Increment the group ID and add the track set to the session state 
-    group_id = st.session_state.count
-    st.session_state.groups[group_id] = track_set
-    st.session_state.count += 1
+            # Aadd the track set and groupd name to the session state 
+            group_id = st.session_state.count
+            st.session_state.groups[group_id] = {'name':group_name, 'tracks':track_set}
 
-    # Add output drawing for current group to the session state with a random color 
-    # Draws all points for the tracks belonging to the group s
-    draw_points = spots_df[spots_df['TRACK_ID'].isin(st.session_state.groups[group_id])]
-    coords = tuple(zip(draw_points.POSITION_X.astype(float),draw_points.POSITION_Y.astype(float)))
-    color = tuple(np.random.randint(150,255,3))
-    st.session_state.selections['draw'].point(coords, fill=color)
+            # Add output drawing for current group to the session state with a random color 
+            # Draws all points for the tracks belonging to the group s
+            draw_points = spots_df[spots_df['TRACK_ID'].isin(st.session_state.groups[group_id]['tracks'])]
+            coords = tuple(zip(draw_points.POSITION_X.astype(float),draw_points.POSITION_Y.astype(float)))
+            st.session_state.groups[group_id]['points'] = coords
+            color = tuple(np.random.randint(150,255,3))
+            st.session_state.selections['draw'].point(coords, fill=color)
 
-    # toc = time.perf_counter()
-    # st.write(toc - tic, "seconds")
+            # Increment the group ID
+            st.session_state.count += 1
+
+            # toc = time.perf_counter()
+            # st.write(toc - tic, "seconds")
+
+    with col2:
+        if st.button('Clear Groups'):
+            st.session_state['count'] = 1
+            st.session_state['groups'] = dict()
+            st.session_state['selections'] = dict.fromkeys(['im','draw'])
+            st.session_state.selections['im'] = Image.new('RGB', (1504, 352), (0,0,0))
+            st.session_state.selections['draw'] = ImageDraw.Draw(st.session_state.selections['im'])
+
+    with st.sidebar.expander("Output Options"):
+        items = [str(key) for key in st.session_state.groups.keys()]
+        output_options = ['All'] + items
+        # if len(items) > 0:
+        #     output_options.append(items)
+        output_groups = st.selectbox("Select Group to Display",output_options)
 
 # Draw Output if background image is loaded 
 if bg_image:
     st.write('### Output')
     st.image(st.session_state.selections['im'])
+    # st.write(st.session_state.groups)
+    # st.write(list(output_options))
 
 # NOTES:
 # 1) Add convexity checker
 # 2) Add better color picker
 # 3) Add thicker spots
-# 4) Add clear groups button
-# 5) Add demo mode button
 # 6) Add export tracks button in dedicated expander ***
 # 7) Add metadata fields in dedicated expander ***
-# 8) Add drawing buttons in dedicated expander ***
-# 9) Add scaling function for input image (disable wide mode )
-# 10) Display Group metrics (number of tracks in group, aggregage stats, etc)
+# 9) Add scaling function for input image (disable wide mode ) ***
+# 10) Display Group metrics (number of tracks in group, aggregage stats, etc) ***
+# 11) Flexible Video Metadata 
+# 12) Custom video output display 
