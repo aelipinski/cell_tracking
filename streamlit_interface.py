@@ -6,7 +6,7 @@ import numpy as np
 import time
 
 # Sets the streamlit from the default narrow layout to the full width
-st.set_page_config(layout="wide")
+# st.set_page_config(layout="wide")
 
 # ----------------------------------- FUNCTIONS -----------------------------------
 
@@ -62,12 +62,12 @@ if 'count' not in st.session_state:
     st.session_state['count'] = 1
     st.session_state['groups'] = dict()
     st.session_state['selections'] = dict.fromkeys(['im','draw'])
-    st.session_state.selections['im'] = Image.new('RGB', (1504, 352), (0,0,0))
+    st.session_state.selections['im'] = Image.new('RGB', (1504, 352), (240, 242, 246))
     st.session_state.selections['draw'] = ImageDraw.Draw(st.session_state.selections['im'])
 
 # Title and header
-st.title("Tracking Data Labelling")
-st.write("Annotate TrackMate tracking data with run information and track group labels")
+st.title("TrackMate Annotation Tool")
+# st.write("Annotate TrackMate tracking data with run information and track group labels")
 
 # Add CSV uploaders for spots and tracking data and image uploader to the sidebar within expander 
 with st.sidebar.expander('Load Data'):
@@ -99,6 +99,9 @@ with st.sidebar.expander("Group Parameters"):
 poly_type = {"Include":["rgba(10, 255, 0, 0.3)","rgba(10, 255, 0, 1)"],\
             "Exclude":["rgba(255, 10, 0, 0.3)","rgba(255, 10, 0, 1)"]}
 
+output_colors = [(228,26,28),(55,126,184),(77,175,74),(152,78,163), \
+    (255,127,0),(255,255,51),(166,86,40),(247,129,191),(153,153,153)]
+
 # Draws Input and Output images if a background image has been loaded 
 if spots_data and track_data and bg_image:
 
@@ -122,7 +125,7 @@ if spots_data and track_data and bg_image:
         key="canvas",
     )
 
-    col1, col2 = st.columns([1,6])
+    col1, col2 = st.columns([1,3])
 
     with col1:
         # Creates new group when button is clicked (checks points, add labels to corresponding tracks, draws output)
@@ -137,7 +140,6 @@ if spots_data and track_data and bg_image:
             neg_set = set()
 
             # Iterate through all polygons and keep track of track IDs to add or subtract 
-            # tic = time.perf_counter()
             for poly in range(num_poly):
 
                 # returns index values of points included within polygon
@@ -165,44 +167,47 @@ if spots_data and track_data and bg_image:
             draw_points = spots_df[spots_df['TRACK_ID'].isin(st.session_state.groups[group_id]['tracks'])]
             coords = tuple(zip(draw_points.POSITION_X.astype(float),draw_points.POSITION_Y.astype(float)))
             st.session_state.groups[group_id]['points'] = coords
-            color = tuple(np.random.randint(150,255,3))
+            color = output_colors[(group_id-1) % len(output_colors)]
+            st.session_state.groups[group_id]['color'] = color
             st.session_state.selections['draw'].point(coords, fill=color)
 
             # Increment the group ID
             st.session_state.count += 1
-
-            # toc = time.perf_counter()
-            # st.write(toc - tic, "seconds")
 
     with col2:
         if st.button('Clear Groups'):
             st.session_state['count'] = 1
             st.session_state['groups'] = dict()
             st.session_state['selections'] = dict.fromkeys(['im','draw'])
-            st.session_state.selections['im'] = Image.new('RGB', (1504, 352), (0,0,0))
+            st.session_state.selections['im'] = Image.new('RGB', (1504, 352), (240, 242, 246))
             st.session_state.selections['draw'] = ImageDraw.Draw(st.session_state.selections['im'])
 
     with st.sidebar.expander("Output Options"):
-        items = [str(key) for key in st.session_state.groups.keys()]
+        # items = [str(key) for key in st.session_state.groups.keys()]
+        items = list(st.session_state.groups.keys())
         output_options = ['All'] + items
-        # if len(items) > 0:
-        #     output_options.append(items)
         output_groups = st.selectbox("Select Group to Display",output_options)
 
 # Draw Output if background image is loaded 
 if bg_image:
     st.write('### Output')
-    st.image(st.session_state.selections['im'])
+
+    if output_groups == 'All':
+        st.image(st.session_state.selections['im'])
+    else:
+        im_single = Image.new('RGB', (1504, 352), (240, 242, 246))
+        draw_single = ImageDraw.Draw(im_single)
+        draw_single.point(st.session_state.groups[output_groups]['points'], fill = st.session_state.groups[output_groups]['color'])
+        st.image(im_single)
+        # pass
     # st.write(st.session_state.groups)
-    # st.write(list(output_options))
+    # st.write(st.session_state['groups']["1"])
 
 # NOTES:
 # 1) Add convexity checker
-# 2) Add better color picker
 # 3) Add thicker spots
 # 6) Add export tracks button in dedicated expander ***
 # 7) Add metadata fields in dedicated expander ***
 # 9) Add scaling function for input image (disable wide mode ) ***
 # 10) Display Group metrics (number of tracks in group, aggregage stats, etc) ***
 # 11) Flexible Video Metadata 
-# 12) Custom video output display 
