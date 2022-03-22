@@ -12,6 +12,7 @@ def process_spots_data(spots_data):
     spots_df = pd.read_csv(spots_data)
     spots_df = spots_df.drop([0,1,2])
     spots_df = spots_df.reset_index()
+    spots_df['TRACK_ID'] = spots_df['TRACK_ID'].astype(int)
     spots_array = np.array(spots_df[["POSITION_X", "POSITION_Y"]]).astype(float)
     return spots_df, spots_array
 
@@ -20,6 +21,7 @@ def process_track_data(track_data):
     track_df = pd.read_csv(track_data)
     track_df = track_df.drop([0,1,2])
     track_df = track_df.reset_index()
+    track_df['TRACK_ID'] = track_df['TRACK_ID'].astype(int)
     return track_df
 
 # Finds line coefficients for each polygon edge
@@ -57,6 +59,8 @@ def initialize_session_state():
     st.session_state['selections'] = dict.fromkeys(['im','draw'])
     st.session_state.selections['im'] = Image.new('RGB', (800, int(img_height/scale_factor)), (240, 242, 246))
     st.session_state.selections['draw'] = ImageDraw.Draw(st.session_state.selections['im'])
+    st.session_state['spots_df'], st.session_state['spots_array'] = process_spots_data(spots_data)
+    st.session_state['track_df'] = process_track_data(track_data)   
 
 # ----------------------------------- LAYOUT -----------------------------------
 
@@ -111,10 +115,6 @@ if spots_data and track_data and bg_image:
     if 'count' not in st.session_state:
         initialize_session_state()
 
-    # Convert CSV filts to dataframes 
-    spots_df, spots_array = process_spots_data(spots_data)
-    track_df = process_track_data(track_data)   
-
     # Create drawing canvas using API
     st.write('### Input')
     canvas_result = st_canvas(
@@ -146,10 +146,10 @@ if spots_data and track_data and bg_image:
         for poly in range(num_poly):
 
             # returns index values of points included within polygon
-            point_indices = test_all_points(spots_array,edge_coefs[poly])
+            point_indices = test_all_points(st.session_state.spots_array,edge_coefs[poly])
 
             # retreive corresponding tracks for the bounded points
-            poly_set = set(spots_df["TRACK_ID"][point_indices])
+            poly_set = set(st.session_state.spots_df["TRACK_ID"][point_indices])
 
             # Check if polygon is an include or exclude type by looking at it's color (red or green)
             # Then add or remove track IDs depending on type
@@ -167,13 +167,15 @@ if spots_data and track_data and bg_image:
 
         # Add output drawing for current group to the session state with a random color 
         # Draws all points for the tracks belonging to the group s
-        draw_points = spots_df[spots_df['TRACK_ID'].isin(st.session_state.groups[group_id]['tracks'])]
+        draw_points = st.session_state.spots_df[st.session_state.spots_df['TRACK_ID'].isin(track_set)]
         coords = tuple(zip(draw_points.POSITION_X.astype(float)/scale_factor,draw_points.POSITION_Y.astype(float)/scale_factor))
         st.session_state.groups[group_id]['points'] = coords
         color = output_colors[(group_id-1) % len(output_colors)]
         st.session_state.groups[group_id]['color'] = color
         st.session_state.selections['draw'].point(coords, fill=color)
         st.session_state.group_stats.loc[group_id-1] = [group_id, group_name, len(track_set)]
+        st.session_state.track_df.loc[st.session_state.track_df['TRACK_ID'].isin(track_set),['GROUP_ID','GROUP_NAME']] = [group_id, group_name]
+        st.session_state.group_stats.loc[len(st.session_state.group_stats)] = [len(st.session_state.group_stats), 'Ungrouped', sum(pd.isna(st.session_state.track_df['GROUP_ID']))]
 
         # Increment the group ID
         st.session_state.count += 1
@@ -181,7 +183,7 @@ if spots_data and track_data and bg_image:
     with st.sidebar.expander("Display Settings"):
         show_stats = st.checkbox('Show Group Stats',False)
         items = list(st.session_state.groups.keys())
-        output_options = ['All'] + items
+        output_options = ['All Groups','Ungrouped'] + items
         output_groups = st.selectbox("Select Group to Display",output_options)
 
     if st.sidebar.button('Export'):
@@ -191,8 +193,19 @@ if spots_data and track_data and bg_image:
 if bg_image:
     st.write('### Output')
 
-    if output_groups == 'All':
+    if output_groups == 'All Groups':
         st.image(st.session_state.selections['im'])
+    elif output_groups == 'Ungrouped':
+        if len(st.session_state['groups']) > 0:
+            untracked = st.session_state.track_df.loc[pd.isna(st.session_state.track_df['GROUP_ID']),'TRACK_ID'].unique()
+            draw_points = st.session_state.spots_df[st.session_state.spots_df['TRACK_ID'].isin(untracked)]
+        else:
+            draw_points = st.session_state.spots_df
+        coords = tuple(zip(draw_points.POSITION_X.astype(float)/scale_factor,draw_points.POSITION_Y.astype(float)/scale_factor))
+        im_single = Image.new('RGB', (800, int(img_height/scale_factor)), (240, 242, 246))
+        draw_single = ImageDraw.Draw(im_single)
+        draw_single.point(coords, fill = (0,0,0))
+        st.image(im_single)
     else:
         im_single = Image.new('RGB', (800, int(img_height/scale_factor)), (240, 242, 246))
         draw_single = ImageDraw.Draw(im_single)
@@ -206,5 +219,5 @@ if bg_image:
 # NOTES:
 # Add convexity checker
 # Add export tracks button in dedicated expander ***
-# Add metadata fields in dedicated expander or make it flexible
+# Add metadata fields in dedicated expander or make it flexible ***
 # Display Group metrics (number of tracks in group, aggregage stats, etc) 
