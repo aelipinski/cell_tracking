@@ -192,9 +192,9 @@ if spots_data and track_data and bg_image:
     #     if st.button('Reset'):
     #         initialize_session_state()
 
-    if st.button('Export'):
+    if st.sidebar.button('Export'):
         pass    
-    if st.button('Reset'):
+    if st.sidebar.button('Reset'):
         initialize_session_state()
 
     # Draw Output if background image is loaded 
