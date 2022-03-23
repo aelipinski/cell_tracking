@@ -108,8 +108,6 @@ if spots_data and track_data and bg_image:
     with st.sidebar.expander("Drawing Options"):
         poly_create = st.radio("Mode", ("Include","Exclude"))  
         group_name = st.text_input("Group Name", help="Add name for group")
-        if st.button('Clear Groups'):
-            initialize_session_state()
 
     # Initialize session state variables for iterative group creation
     # This prevents the groups from being deleted with each Streamlit run 
@@ -185,11 +183,16 @@ if spots_data and track_data and bg_image:
         show_stats = st.checkbox('Show Group Stats',False)
         output_groups = st.selectbox("Select Group to Display",st.session_state.output_options)
 
-    if st.sidebar.button('Export'):
-        pass    
+    # Add Export and Reset Buttons side by side
+    col1, col2 = st.sidebar.columns([1,2])
+    with col1:
+        if st.button('Export'):
+            pass    
+    with col2:
+        if st.button('Reset'):
+            initialize_session_state()
 
-# Draw Output if background image is loaded 
-if bg_image:
+    # Draw Output if background image is loaded 
     st.write('### Output')
 
     if output_groups == 'All Groups':
@@ -214,6 +217,7 @@ if bg_image:
     if len(st.session_state['groups']) > 0 and show_stats:
         st.write('### Group Summary')
         st.dataframe(st.session_state.group_stats)
+
 
 # NOTES:
 # Add convexity checker
