@@ -1,6 +1,7 @@
 name: streamlit_interface
 channels: 
-  - pip 
+  - pypi
+  - defaults 
 dependencies:
   - numpy
   - pandas
