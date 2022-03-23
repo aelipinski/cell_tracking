@@ -184,13 +184,18 @@ if spots_data and track_data and bg_image:
         output_groups = st.selectbox("Select Group to Display",st.session_state.output_options)
 
     # Add Export and Reset Buttons side by side
-    col1, col2 = st.sidebar.columns([1,2])
-    with col1:
-        if st.button('Export'):
-            pass    
-    with col2:
-        if st.button('Reset'):
-            initialize_session_state()
+    # col1, col2 = st.sidebar.columns([1,2])
+    # with col1:
+    #     if st.button('Export'):
+    #         pass    
+    # with col2:
+    #     if st.button('Reset'):
+    #         initialize_session_state()
+
+    if st.button('Export'):
+        pass    
+    if st.button('Reset'):
+        initialize_session_state()
 
     # Draw Output if background image is loaded 
     st.write('### Output')
