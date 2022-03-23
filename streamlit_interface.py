@@ -176,8 +176,7 @@ if spots_data and track_data and bg_image:
         st.session_state.group_stats.loc[group_id-1] = [group_id, group_name, len(track_set)]
         st.session_state.track_df.loc[st.session_state.track_df['TRACK_ID'].isin(track_set),['GROUP_ID','GROUP_NAME']] = [group_id, group_name]
         st.session_state.group_stats.loc[len(st.session_state.group_stats)] = [len(st.session_state.group_stats)+1, 'Ungrouped', sum(pd.isna(st.session_state.track_df['GROUP_ID']))]
-        items = list(st.session_state.groups.keys())
-        st.session_state.output_options += items
+        st.session_state.output_options += str(group_id)
 
         # Increment the group ID
         st.session_state.count += 1
