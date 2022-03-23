@@ -61,6 +61,7 @@ def initialize_session_state():
     st.session_state.selections['draw'] = ImageDraw.Draw(st.session_state.selections['im'])
     st.session_state['spots_df'], st.session_state['spots_array'] = process_spots_data(spots_data)
     st.session_state['track_df'] = process_track_data(track_data)   
+    st.session_state['output_options'] = ['All Groups','Ungrouped']
 
 # ----------------------------------- LAYOUT -----------------------------------
 
@@ -175,15 +176,15 @@ if spots_data and track_data and bg_image:
         st.session_state.group_stats.loc[group_id-1] = [group_id, group_name, len(track_set)]
         st.session_state.track_df.loc[st.session_state.track_df['TRACK_ID'].isin(track_set),['GROUP_ID','GROUP_NAME']] = [group_id, group_name]
         st.session_state.group_stats.loc[len(st.session_state.group_stats)] = [len(st.session_state.group_stats)+1, 'Ungrouped', sum(pd.isna(st.session_state.track_df['GROUP_ID']))]
+        items = list(st.session_state.groups.keys())
+        st.session_state.output_options += items
 
         # Increment the group ID
         st.session_state.count += 1
 
     with st.sidebar.expander("Display Settings"):
         show_stats = st.checkbox('Show Group Stats',False)
-        items = list(st.session_state.groups.keys())
-        output_options = ['All Groups','Ungrouped'] + items
-        output_groups = st.selectbox("Select Group to Display",output_options)
+        output_groups = st.selectbox("Select Group to Display",st.session_state.output_options)
 
     if st.sidebar.button('Export'):
         pass    
