@@ -1,9 +1,0 @@
-name: streamlit_interface
-channels: 
-  - pypi
-  - defaults 
-dependencies:
-  - numpy
-  - pandas
-  - streamlit-drawable-canvas
-  - PIL
