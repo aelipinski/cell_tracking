@@ -127,7 +127,6 @@ if spots_data and track_data and bg_image:
         height=img_height/scale_factor,
         width = 800,
         drawing_mode="polygon",
-        point_display_radius=1,
         key="canvas"
     )
 
