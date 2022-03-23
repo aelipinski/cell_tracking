@@ -221,3 +221,4 @@ if bg_image:
 # Add export tracks button in dedicated expander ***
 # Add metadata fields in dedicated expander or make it flexible ***
 # Display Group metrics (number of tracks in group, aggregage stats, etc) 
+# write manual
