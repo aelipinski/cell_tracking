@@ -62,6 +62,7 @@ def initialize_session_state():
     st.session_state['spots_df'], st.session_state['spots_array'] = process_spots_data(spots_data)
     st.session_state['track_df'] = process_track_data(track_data)   
     st.session_state['output_options'] = ['All Groups','Ungrouped']
+    st.experimental_rerun()
 
 # ----------------------------------- LAYOUT -----------------------------------
 
