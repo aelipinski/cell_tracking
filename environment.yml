@@ -1,7 +1,6 @@
 name: streamlit_interface
 channels: 
-  - defaults
-  - conda-forge 
+  - pip 
 dependencies:
   - numpy
   - pandas
