@@ -1,3 +1,2 @@
-streamlit>=0.88
 streamlit-drawable-canvas>=0.9
-pillow>=8.1.2
+pil
