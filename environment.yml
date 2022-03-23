@@ -1,6 +1,8 @@
 name: streamlit_interface
+channels: 
+  - conda 
 dependencies:
   - numpy
   - pandas
-  - streamlit_drawable_canvas
+  - streamlit-drawable-canvas
   - PIL
