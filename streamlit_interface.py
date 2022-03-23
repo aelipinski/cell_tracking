@@ -128,7 +128,7 @@ if spots_data and track_data and bg_image:
         width = 800,
         drawing_mode="polygon",
         point_display_radius=1,
-        key="canvas",
+        key="canvas"
     )
 
     # Creates new group when button is clicked (checks points, add labels to corresponding tracks, draws output)
