@@ -100,6 +100,8 @@ output_colors = [(228,26,28),(55,126,184),(77,175,74),(152,78,163), \
 # Draws Input and Output images if a background image has been loaded 
 if spots_data and track_data and bg_image:
 
+    st.write('### Input')
+
     # Read image dimensions and determine scaling factor for a width of 800 
     img_width,img_height = Image.open(bg_image).size
     scale_factor = img_width/800
@@ -115,7 +117,7 @@ if spots_data and track_data and bg_image:
         initialize_session_state()
 
     # Create drawing canvas using API
-    st.write('### Input')
+    
     canvas_result = st_canvas(
         fill_color=poly_type[poly_create][0],  
         stroke_width=1,
@@ -184,18 +186,13 @@ if spots_data and track_data and bg_image:
         output_groups = st.selectbox("Select Group to Display",st.session_state.output_options)
 
     # Add Export and Reset Buttons side by side
-    # col1, col2 = st.sidebar.columns([1,2])
-    # with col1:
-    #     if st.button('Export'):
-    #         pass    
-    # with col2:
-    #     if st.button('Reset'):
-    #         initialize_session_state()
-
-    if st.sidebar.button('Export'):
-        pass    
-    if st.sidebar.button('Reset'):
-        initialize_session_state()
+    col1, col2 = st.sidebar.columns([1,2])
+    with col1:
+        if st.button('Export'):
+            pass    
+    with col2:
+        if st.button('Reset'):
+            initialize_session_state()
 
     # Draw Output if background image is loaded 
     st.write('### Output')
