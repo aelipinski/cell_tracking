@@ -1,0 +1,6 @@
+name: streamlit_interface
+dependencies:
+  - numpy
+  - pandas
+  - streamlit_drawable_canvas
+  - PIL
