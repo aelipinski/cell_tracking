@@ -52,6 +52,11 @@ def test_all_points(spots_array, all_coefs):
     point_indices = np.all(sideA, axis=1) + np.all(sideB, axis=1)
     return point_indices
 
+# Calculates angle from line endpoints
+def get_angle(x1,x2,y1,y2):
+    angle = np.degrees(np.arctan((y2-y1)/(x2-x1)))
+    return angle
+
 def initialize_session_state():
     st.session_state['count'] = 1
     st.session_state['groups'] = dict()
@@ -62,6 +67,7 @@ def initialize_session_state():
     st.session_state['spots_df'], st.session_state['spots_array'] = process_spots_data(spots_data)
     st.session_state['track_df'] = process_track_data(track_data)   
     st.session_state['output_options'] = ['All Groups','Ungrouped']
+    st.session_state['calib_angle'] = 0.0
     st.experimental_rerun()
 
 # ----------------------------------- LAYOUT -----------------------------------
@@ -85,15 +91,12 @@ with st.sidebar.expander('Load Data'):
         bg_image = st.file_uploader("Background Composite Image:", type=["png", "jpg"], accept_multiple_files=False, \
             help="Data should be an image from TrackMate showing all tracks overlapping a background video frame.")  
 
-# Specify metadata that applies to entire video 
-with st.sidebar.expander('Video Metadata'):
-    ridge_spacing = st.text_input("Ridge Spacing")
-    ridge_angle = st.text_input("Ridge Angle")
-    flowrate = st.text_input("Fluid Flowrate")
-
 # Dictionary to set fill and stroke colors for include and exlude polygon objects 
-poly_type = {"Include":["rgba(10, 255, 0, 0.3)","rgba(10, 255, 0, 1)"],\
-            "Exclude":["rgba(255, 10, 0, 0.3)","rgba(255, 10, 0, 1)"]}
+poly_color = {"Include":["rgba(10, 255, 0, 0.3)","rgba(10, 255, 0, 1)"],\
+            "Exclude":["rgba(255, 10, 0, 0.3)","rgba(255, 10, 0, 1)"],\
+            "Calibration":["rgba(0, 0, 0, 0)","rgba(133, 229, 255, 1)"]}
+
+poly_type = {"Labeling":"polygon","Calibration":"line"}
 
 output_colors = [(228,26,28),(55,126,184),(77,175,74),(152,78,163), \
     (255,127,0),(255,255,51),(166,86,40),(247,129,191),(153,153,153)]
@@ -101,86 +104,124 @@ output_colors = [(228,26,28),(55,126,184),(77,175,74),(152,78,163), \
 # Draws Input and Output images if a background image has been loaded 
 if spots_data and track_data and bg_image:
 
-    st.write('### Input')
-
     # Read image dimensions and determine scaling factor for a width of 800 
     img_width,img_height = Image.open(bg_image).size
     scale_factor = img_width/800
-
-    # Specify canvas parameters in application
-    with st.sidebar.expander("Drawing Options"):
-        poly_create = st.radio("Mode", ("Include","Exclude"))  
-        group_name = st.text_input("Group Name", help="Add name for group")
 
     # Initialize session state variables for iterative group creation
     # This prevents the groups from being deleted with each Streamlit run 
     if 'count' not in st.session_state:
         initialize_session_state()
 
+    st.write('### Input')
+
+    # Specify metadata that applies to entire video 
+    with st.sidebar.expander('Video Metadata'):
+        ridge_spacing = st.number_input("Ridge Spacing")
+        ridge_angle = st.number_input("Nominal Angle",)
+        st.write("Calibration angle:",round(st.session_state.calib_angle,2))
+        st.write("True angle:",round(st.session_state.calib_angle + ridge_angle,2))
+        flowrate = st.text_input("Fluid Flowrate")
+
+    # Specify canvas parameters in application
+    with st.sidebar.expander("Drawing Options"):
+        draw_mode = st.radio("Mode",("Labeling","Calibration"))
+        if draw_mode == "Labeling":
+            label_type = st.radio("Label Type", ("Include","Exclude"))  
+            group_name = st.text_input("Label Name", help="Add name for group")            
+
     # Create drawing canvas using API
     
     canvas_result = st_canvas(
-        fill_color=poly_type[poly_create][0],  
+        fill_color=poly_color[label_type][0] if draw_mode == "Labeling" else poly_color["Calibration"][0],  
         stroke_width=1,
-        stroke_color=poly_type[poly_create][1],
+        stroke_color=poly_color[label_type][1] if draw_mode == "Labeling" else poly_color["Calibration"][1],
         background_color= "#eee",
         background_image=Image.open(bg_image),
         update_streamlit=True,
         height=img_height/scale_factor,
         width = 800,
-        drawing_mode="polygon",
-        key="canvas"
+        drawing_mode=poly_type[draw_mode],
+        key=draw_mode
     )
 
-    # Creates new group when button is clicked (checks points, add labels to corresponding tracks, draws output)
-    if st.button('Create Group') and len(canvas_result.json_data["objects"]) > 0:
+    if draw_mode == "Labeling":
+        # Creates new group when button is clicked (checks points, add labels to corresponding tracks, draws output)
+        if st.button('Create Group') and len(canvas_result.json_data["objects"]) > 0:
 
-        # Determine the number of polygons to check and get edge coefficients for each polygon 
-        num_poly = len(canvas_result.json_data["objects"])
-        edge_coefs = get_edge_coefs(canvas_result.json_data["objects"])
+            # Determine the number of polygons to check and get edge coefficients for each polygon 
+            num_poly = len(canvas_result.json_data["objects"])
+            edge_coefs = get_edge_coefs(canvas_result.json_data["objects"])
 
-        # Initialize positive and negative track sets 
-        track_set = set()
-        neg_set = set()
+            # Initialize positive and negative track sets 
+            track_set = set()
+            neg_set = set()
 
-        # Iterate through all polygons and keep track of track IDs to add or subtract 
-        for poly in range(num_poly):
+            # Iterate through all polygons and keep track of track IDs to add or subtract 
+            for poly in range(num_poly):
 
-            # returns index values of points included within polygon
-            point_indices = test_all_points(st.session_state.spots_array,edge_coefs[poly])
+                # returns index values of points included within polygon
+                point_indices = test_all_points(st.session_state.spots_array,edge_coefs[poly])
 
-            # retreive corresponding tracks for the bounded points
-            poly_set = set(st.session_state.spots_df["TRACK_ID"][point_indices])
+                # retreive corresponding tracks for the bounded points
+                poly_set = set(st.session_state.spots_df["TRACK_ID"][point_indices])
 
-            # Check if polygon is an include or exclude type by looking at it's color (red or green)
-            # Then add or remove track IDs depending on type
-            if canvas_result.json_data["objects"][poly]["fill"] == poly_type["Include"][0]:
-                track_set = track_set | poly_set
+                # Check if polygon is an include or exclude type by looking at it's color (red or green)
+                # Then add or remove track IDs depending on type
+
+                if canvas_result.json_data["objects"][poly]["fill"] == poly_color["Include"][0]:
+                    track_set = track_set | poly_set
+                else:
+                    neg_set = neg_set | poly_set
+
+                # if canvas_result.json_data["objects"][poly]["fill"] == poly_color["Include"][0]:
+                #     if len(track_set) > 0:
+                #         track_set = track_set & poly_set
+                #     else:
+                #         track_set = track_set | poly_set
+                # else:
+                #     if len(neg_set) > 0:
+                #         neg_set = neg_set & poly_set
+                #     else:
+                #         neg_set = neg_set | poly_set
+            
+            # Create final track set by subtracting the negative set 
+            track_set = track_set - neg_set
+
+            # Aadd the track set and groupd name to the session state 
+            group_id = st.session_state.count
+            st.session_state.groups[group_id] = {'name':group_name, 'tracks':track_set}
+
+            # Add output drawing for current group to the session state with a random color 
+            # Draws all points for the tracks belonging to the group s
+            draw_points = st.session_state.spots_df[st.session_state.spots_df['TRACK_ID'].isin(track_set)]
+            coords = tuple(zip(draw_points.POSITION_X.astype(float)/scale_factor,draw_points.POSITION_Y.astype(float)/scale_factor))
+            st.session_state.groups[group_id]['points'] = coords
+            color = output_colors[(group_id-1) % len(output_colors)]
+            st.session_state.groups[group_id]['color'] = color
+            st.session_state.selections['draw'].point(coords, fill=color)
+            st.session_state.group_stats.loc[group_id-1] = [group_id, group_name, len(track_set)]
+            st.session_state.track_df.loc[st.session_state.track_df['TRACK_ID'].isin(track_set),['GROUP_ID','GROUP_NAME']] = [group_id, group_name]
+            st.session_state.group_stats.loc[len(st.session_state.group_stats)] = [len(st.session_state.group_stats)+1, 'Ungrouped', sum(pd.isna(st.session_state.track_df['GROUP_ID']))]
+            st.session_state.output_options.append(group_id)
+
+            # Increment the group ID
+            st.session_state.count += 1
+    else:
+        if st.button('Calibrate Angle'):
+            if len(canvas_result.json_data["objects"])==1:
+                x1 = canvas_result.json_data["objects"][0]["x1"]
+                x2 = canvas_result.json_data["objects"][0]["x2"]
+                y1 = canvas_result.json_data["objects"][0]["y1"]
+                y2 = canvas_result.json_data["objects"][0]["y2"]
+                if x1 < x2:
+                    st.session_state['calib_angle'] = get_angle(x1,x2,y1,y2)
+                else:
+                    st.session_state['calib_angle'] = get_angle(x2,x1,y2,y1)
+                st.experimental_rerun()
             else:
-                neg_set = neg_set | poly_set
-        
-        # Create final track set by subtracting the negative set 
-        track_set = track_set - neg_set
+                st.write("Please create exactly 1 line.")
 
-        # Aadd the track set and groupd name to the session state 
-        group_id = st.session_state.count
-        st.session_state.groups[group_id] = {'name':group_name, 'tracks':track_set}
-
-        # Add output drawing for current group to the session state with a random color 
-        # Draws all points for the tracks belonging to the group s
-        draw_points = st.session_state.spots_df[st.session_state.spots_df['TRACK_ID'].isin(track_set)]
-        coords = tuple(zip(draw_points.POSITION_X.astype(float)/scale_factor,draw_points.POSITION_Y.astype(float)/scale_factor))
-        st.session_state.groups[group_id]['points'] = coords
-        color = output_colors[(group_id-1) % len(output_colors)]
-        st.session_state.groups[group_id]['color'] = color
-        st.session_state.selections['draw'].point(coords, fill=color)
-        st.session_state.group_stats.loc[group_id-1] = [group_id, group_name, len(track_set)]
-        st.session_state.track_df.loc[st.session_state.track_df['TRACK_ID'].isin(track_set),['GROUP_ID','GROUP_NAME']] = [group_id, group_name]
-        st.session_state.group_stats.loc[len(st.session_state.group_stats)] = [len(st.session_state.group_stats)+1, 'Ungrouped', sum(pd.isna(st.session_state.track_df['GROUP_ID']))]
-        st.session_state.output_options.append(group_id)
-
-        # Increment the group ID
-        st.session_state.count += 1
 
     with st.sidebar.expander("Display Settings"):
         show_stats = st.checkbox('Show Group Stats',False)
