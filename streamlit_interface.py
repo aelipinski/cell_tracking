@@ -118,11 +118,11 @@ if spots_data and track_data and bg_image:
     # Specify metadata that applies to entire video 
     with st.sidebar.expander('Video Metadata'):
         ridge_spacing = st.number_input("Ridge Spacing")
-        ridge_angle = st.number_input("Nominal Angle",)
+        flowrate = st.number_input("Fluid Flowrate")
+        ridge_angle = st.number_input("Nominal Angle")
         st.write("Calibration angle:",round(st.session_state.calib_angle,2))
         st.write("True angle:",round(st.session_state.calib_angle + ridge_angle,2))
-        flowrate = st.text_input("Fluid Flowrate")
-
+        
     # Specify canvas parameters in application
     with st.sidebar.expander("Drawing Options"):
         draw_mode = st.radio("Mode",("Labeling","Calibration"))
@@ -224,7 +224,7 @@ if spots_data and track_data and bg_image:
 
 
     with st.sidebar.expander("Display Settings"):
-        show_stats = st.checkbox('Show Group Stats',False)
+        show_stats = st.checkbox('Show Group Summary',False)
         output_groups = st.selectbox("Select Group to Display",st.session_state.output_options)
 
     # Add Export and Reset Buttons side by side
@@ -265,6 +265,7 @@ if spots_data and track_data and bg_image:
 
 # NOTES:
 # Add convexity checker
+# swith to direct angle measurement?
 # Add export tracks button in dedicated expander ***
 # Add metadata fields in dedicated expander or make it flexible ***
 # Display Group metrics (number of tracks in group, aggregage stats, etc) 
