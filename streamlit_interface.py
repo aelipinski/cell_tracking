@@ -140,19 +140,43 @@ def label_page():
         # Specify metadata that applies to entire video 
         with st.sidebar.expander('Video Metadata'):
             vid_id = st.text_input("Video ID")
-            ridge_spacing = st.number_input("Ridge Spacing")
-            flowrate = st.number_input("Fluid Flowrate")
-            ridge_angle = st.number_input("Nominal Angle")
+            ridge_angle = st.number_input("Ridge Angle (deg)")
+
+            # Calculate and display calibrated angle and true angle 
             st.write("Calibration angle:",round(st.session_state.calib_angle,2))
             true_angle = st.session_state.calib_angle + ridge_angle
             st.write("True angle:",round(true_angle,2))
+
+            ridge_number = st.number_input("Ridge Number",min_value=1, max_value=10, step=1)
+            ridge_spacing = st.number_input("Ridge Spacing (um)")
+            ridge_width = st.number_input("Ridge Width (um)")
+            ridge_design = st.selectbox("Ridge Design",['Straight','Chevron'])
+            gap_size = st.number_input("Gap Size (um)")
+            gutter_number = st.selectbox("Gutter Number",[0,1,2])
+            gutter_size = st.number_input("Gutter Size (um)")
+            channel_width = st.number_input("Channel Width (um)")
+            flowrate = st.number_input("Fluid Flowrate (uL/min)")
+            sheath_number = st.selectbox("Sheath Number",[0,1,2])
+            media = st.selectbox("Media", ['Media', 'Flow Buffer', 'Other'])	
+            cell_conc = st.number_input('Cell Concentration (million cells/mL)')
+
             metadata_dict = {
                 "meta_vidID":vid_id,
-                "meta_ridge_spacing":ridge_spacing,
-                "meta_flowrate":flowrate,
                 "meta_ridge_angle":ridge_angle,
                 "meta_calib_angle":st.session_state.calib_angle,
-                "meta_true_angle":true_angle
+                "meta_true_angle":true_angle,
+                "meta_ridge_number":ridge_number,
+                "meta_ridge_spacing":ridge_spacing,
+                "meta_ridge_width":ridge_width,
+                "meta_ridge_design":ridge_design,
+                "meta_gap_size":gap_size,
+                "meta_gutter_number":gutter_number,
+                "meta_gutter_size":gutter_size,
+                "meta_channel_width":channel_width,
+                "meta_flowrate":flowrate,
+                "meta_sheath_number":sheath_number,
+                "meta_media":media,
+                "meta_cell_conc":cell_conc
             }
             
         # Specify canvas parameters in application
@@ -309,10 +333,9 @@ PAGES[page]()
 
 # ---- PART 1 ----
 # Add convexity checker
-# Save pre-made configurations 
-# Change spots column names
+# Save pre-made configurations ***
+# Change spots column names ***
 # Wrap calculation in functions with st.experimental_memo (leave out markdown parts)
-# Add metadata fields in dedicated expander or make it flexible ***
 # Display Group metrics (number of tracks in group, aggregage stats, etc) 
 
 # ---- PART 2 ----
