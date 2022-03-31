@@ -64,9 +64,21 @@ def clear_session_state():
         del st.session_state[key]
 
 def prepare_export(metadata_dict):
+    spots_agg_dict = {
+        'AREA':'mean',
+        'POSITION_X':['min','mean','max'],
+        'POSITION_Y':['min','mean','max'],
+        'MEAN_INTENSITY_CH1':'mean'
+    }
+
+    spots_agg_df = st.session_state['spots_df'][['TRACK_ID']+list(spots_agg_dict.keys())].astype(float)
+    spots_agg_df = spots_agg_df.groupby('TRACK_ID').agg(spots_agg_dict)
+
     for key in metadata_dict.keys():
         st.session_state['track_df'][key] = metadata_dict[key]
-    return st.session_state['track_df'].to_csv()
+
+    export_df = pd.merge(st.session_state['track_df'],spots_agg_df,on='TRACK_ID')
+    return export_df.to_csv()
 
 def initialize_session_state_label(spots_data, track_data, img_height, scale_factor):
     st.session_state['count'] = 1
@@ -123,7 +135,6 @@ def label_page():
         if 'count' not in st.session_state:
             initialize_session_state_label(spots_data, track_data, img_height, scale_factor)
 
-        st.write(st.session_state['spots_df'].columns)
         st.write('### Input')
 
         # Specify metadata that applies to entire video 
@@ -299,6 +310,7 @@ PAGES[page]()
 # ---- PART 1 ----
 # Add convexity checker
 # Save pre-made configurations 
+# Change spots column names
 # Wrap calculation in functions with st.experimental_memo (leave out markdown parts)
 # Add metadata fields in dedicated expander or make it flexible ***
 # Display Group metrics (number of tracks in group, aggregage stats, etc) 
