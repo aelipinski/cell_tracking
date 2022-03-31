@@ -64,23 +64,30 @@ def clear_session_state():
         del st.session_state[key]
 
 def prepare_export(metadata_dict):
+    # Dictionary specifying which columns to keep and which aggregations to perform from spots.csv
     spots_agg_dict = {
         'AREA':'mean',
         'POSITION_X':['min','mean','max'],
         'POSITION_Y':['min','mean','max'],
         'MEAN_INTENSITY_CH1':'mean'
     }
-
+    # Creates a subset of spots_df using only 'TRACK_ID' and the chosen columns to be grouped/aggregated
     spots_agg_df = st.session_state['spots_df'][['TRACK_ID']+list(spots_agg_dict.keys())].astype(float)
+    # Groups by 'TRACK_ID' and performs corresponding aggregations according to spots_agg_dict
     spots_agg_df = spots_agg_df.groupby('TRACK_ID').agg(spots_agg_dict)
-
+    # Improves columns names by adding prefix and combining multi-index column names
+    spots_colnames = pd.Index(['spots_' + e[0] + '_' + e[1] for e in spots_agg_df.columns.tolist()])
+    spots_agg_df.columns = spots_colnames
+    # Adds metadata to track_df as repeating/fixed value for all rows
     for key in metadata_dict.keys():
         st.session_state['track_df'][key] = metadata_dict[key]
-
+    # Merges track_df and the grouped spots_df using 'TRACK_ID' as key
     export_df = pd.merge(st.session_state['track_df'],spots_agg_df,on='TRACK_ID')
+    # Converts to csv for final export 
     return export_df.to_csv()
 
 def initialize_session_state_label(spots_data, track_data, img_height, scale_factor):
+    # Used to reset all the session states values upon start-up or when the 'reset' button is clicked on 'Label' page
     st.session_state['count'] = 1
     st.session_state['groups'] = dict()
     st.session_state['group_stats'] = pd.DataFrame(columns=["Group ID", "Group Name", "Number of Tracks"])
@@ -253,16 +260,20 @@ def label_page():
                 st.session_state.count += 1
         else:
             if st.button('Calibrate Angle'):
+                # Only creates calibration angle if a single line is drawn
                 if len(canvas_result.json_data["objects"])==1:
                     x1 = canvas_result.json_data["objects"][0]["x1"]
                     x2 = canvas_result.json_data["objects"][0]["x2"]
                     y1 = canvas_result.json_data["objects"][0]["y1"]
                     y2 = canvas_result.json_data["objects"][0]["y2"]
+                    # Checks which way the line is facing (changes based on direction of creation by user)
+                    # Necessary to ensure consistent sign of angle, regardless of drawing direction (+ or -)
                     if x1 < x2:
                         st.session_state['calib_angle'] = get_angle(x1,x2,y1,y2)
                     else:
                         st.session_state['calib_angle'] = get_angle(x2,x1,y2,y1)
                     st.experimental_rerun()
+                # If zero or multiple lines are drawn, warns user to correct it
                 else:
                     st.write("Please create exactly 1 line.")
 
