@@ -2,8 +2,11 @@ from curses import meta
 import pandas as pd
 from PIL import Image, ImageDraw
 import streamlit as st
+st.set_page_config(layout="wide")
 from streamlit_drawable_canvas import st_canvas
 import numpy as np
+from feature_select import FeatureSelector
+import re
 
 # ----------------------------------- FUNCTIONS -----------------------------------
 
@@ -23,6 +26,7 @@ def process_track_data(track_data):
     track_df = track_df.drop([0,1,2])
     track_df = track_df.reset_index()
     track_df['TRACK_ID'] = track_df['TRACK_ID'].astype(int)
+    track_df[['GROUP_ID','GROUP_NAME']] = None
     return track_df
 
 # Finds line coefficients for each polygon edge
@@ -83,8 +87,37 @@ def prepare_export(metadata_dict):
         st.session_state['track_df'][key] = metadata_dict[key]
     # Merges track_df and the grouped spots_df using 'TRACK_ID' as key
     export_df = pd.merge(st.session_state['track_df'],spots_agg_df,on='TRACK_ID')
+    export_df.loc[export_df['GROUP_ID'].isna(),['GROUP_ID','GROUP_NAME']] = [0,"Ungrouped"]
     # Converts to csv for final export 
-    return export_df.to_csv()
+    return export_df.to_csv(index=False)
+
+def combine_data(input_data):
+    df_list = []
+    for csv in input_data:
+        df_list.append(pd.read_csv(csv))
+    return pd.concat(df_list)
+
+@st.experimental_memo(suppress_st_warning=True,show_spinner=True)
+def selector(df,target,algo,cat_or_cont,remove,filter_contains):
+    #Filters dataframe by removing the remove features before running selector
+    df = df.drop(columns=remove)
+    if filter_contains:
+        try:
+            filter_regex = filter_contains.replace(" ","").replace(",","|")  
+            df = df[df.columns.drop(list(df.filter(regex=re.compile(filter_regex, re.IGNORECASE))))]
+        except:
+            st.write("Filter words must be separated by commas with no spaces or special characters.")
+    fs = FeatureSelector(df = df, target_col = target)
+    if algo == "MRMR":
+        rank = fs.mrmr()
+    elif cat_or_cont == "Continuous":
+        rank = fs.mutual_info_regress()
+        rank = rank['Feature'].tolist()
+    else:
+        rank = fs.mutual_info_class()
+        rank = rank['Feature'].tolist()
+    # return pd.DataFrame(rank,columns=['Feature'])
+    return rank
 
 def initialize_session_state_label(spots_data, track_data, img_height, scale_factor):
     # Used to reset all the session states values upon start-up or when the 'reset' button is clicked on 'Label' page
@@ -100,13 +133,19 @@ def initialize_session_state_label(spots_data, track_data, img_height, scale_fac
     st.session_state['calib_angle'] = 0.0
     st.experimental_rerun()
 
+def initialize_session_state_analysis(input_data):
+    st.session_state['input_df'] = combine_data(input_data)
+    st.session_state['numeric_df'] = st.session_state['input_df'].select_dtypes(['number'])
+    st.session_state['features_list'] = st.session_state['numeric_df'].columns
+    st.experimental_rerun()
+
 # ----------------------------------- PAGE 1: Labeling  -----------------------------------
 
 def label_page():
 
     # Add CSV uploaders for spots and tracking data and image uploader to the sidebar within expander 
     with st.sidebar.expander('Load Data'):
-        if st.checkbox('Demo Mode'):
+        if st.checkbox('Demo Mode',on_change=clear_session_state):
             spots_data = "demo/spots.csv"
             track_data = "demo/tracks.csv"
             bg_image = "demo/bg1.png"
@@ -325,7 +364,44 @@ def label_page():
 # ----------------------------------- PAGE 2: Analysis -----------------------------------
 
 def analysis_page():
-    pass
+    # Add CSV uploaders within expander 
+    with st.sidebar.expander('Load Data'):
+        if st.checkbox('Demo Mode',on_change=clear_session_state):
+            input_data = ["demo/demo1.csv","demo/demo2.csv"]
+        else:
+            input_data = st.file_uploader("Upload Labeled Tracking Data",type='csv',accept_multiple_files=True, \
+                help="Data must be a CSV file exported from the 'Labeling and Annotation page'.")
+
+    if input_data:
+        # Initialize session state variables 
+        if 'input_df' not in st.session_state:
+            initialize_session_state_analysis(input_data)
+
+        with st.sidebar.expander('Feature Importance'):
+
+            target = st.selectbox("Target Feature",['GROUP_NAME','GROUP_ID'],index=1, \
+                help = "Features will be selected with the ultimate goal of estimating this target feature.")
+
+            cat_or_cont = st.selectbox("Target Data Type",("Categorical", "Continuous"),index=0,\
+                help = "This will help determine which type of algorithm to run - classification or regression.")
+
+            max_num = int(len(st.session_state['features_list'])-1)
+            num_features = st.number_input("Number of Features to Select",min_value=1,max_value=max_num,value=5,\
+                help="Consider the purpose of this feature selection. When in doubt, select a higher number of features.")
+
+            remove = st.multiselect("Remove Specific Features", st.session_state['features_list'],\
+                help = "Remove certain features from the chosen features list.")
+            
+            filter_contains = st.text_input("Remove Features Containing")
+
+            algo = st.selectbox("Choose feature selection algorithm",["MRMR","Mutual Info"],\
+                help = "MRMR: good for redundant data, Mutual Info: good for non-linear data with few redundant variables or when redundancy doesn't matter.")
+
+        with st.expander("Feature Importance",expanded=True):
+            chosen = selector(st.session_state['numeric_df'],target,algo,cat_or_cont,remove,filter_contains)
+            st.write(chosen[:num_features])
+        
+    
 
 # ----------------------------------- Run the app -----------------------------------
 
@@ -333,8 +409,8 @@ def analysis_page():
 st.sidebar.title("TrackMate Analysis")
 
 PAGES = {
-    "Labeling and Annotation": label_page,
-    "Analysis": analysis_page
+    "1. Labeling and Annotation": label_page,
+    "2. Analysis": analysis_page
 }
 page = st.sidebar.selectbox("Page", options=list(PAGES.keys()), on_change=clear_session_state)
 PAGES[page]()
@@ -348,8 +424,12 @@ PAGES[page]()
 # Change spots column names ***
 # Wrap calculation in functions with st.experimental_memo (leave out markdown parts)
 # Display Group metrics (number of tracks in group, aggregage stats, etc) 
+# Check swithching from demo to regular and back
+# Provide default name to group name if left blank ***
 
 # ---- PART 2 ----
+# Check swithching from demo to regular and back
+
 
 # ---- GENERAL ----
 # write manual
