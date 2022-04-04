@@ -3,3 +3,4 @@ pillow==8.1.2
 streamlit==1.7.0
 click<=8.0.4
 scikit-learn
+scipy

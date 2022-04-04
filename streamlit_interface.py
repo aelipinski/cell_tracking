@@ -7,6 +7,7 @@ from streamlit_drawable_canvas import st_canvas
 import numpy as np
 from feature_select import FeatureSelector
 import re
+import scipy.stats as stats
 
 # ----------------------------------- FUNCTIONS -----------------------------------
 
@@ -96,6 +97,13 @@ def combine_data(input_data):
     for csv in input_data:
         df_list.append(pd.read_csv(csv))
     return pd.concat(df_list)
+
+def boschloos_test():
+    df = st.session_state['input_df']
+    df = df[df.GROUP_ID != 0]
+    contingency_table  = pd.crosstab(df['GROUP_NAME'],df['meta_vidID'])
+    exact = stats.boschloo_exact(contingency_table, alternative = 'greater')
+    st.session_state['stat_results'] = (contingency_table,exact.pvalue)
 
 @st.experimental_memo(suppress_st_warning=True,show_spinner=True)
 def selector(df,target,algo,cat_or_cont,remove,filter_contains):
@@ -385,8 +393,8 @@ def analysis_page():
             cat_or_cont = st.selectbox("Target Data Type",("Categorical", "Continuous"),index=0,\
                 help = "This will help determine which type of algorithm to run - classification or regression.")
 
-            max_num = int(len(st.session_state['features_list'])-1)
-            num_features = st.number_input("Number of Features to Select",min_value=1,max_value=max_num,value=5,\
+            # max_num = int(len(st.session_state['features_list'])-1)
+            num_features = st.number_input("Number of Features to Select",min_value=1,max_value=10,value=5,\
                 help="Consider the purpose of this feature selection. When in doubt, select a higher number of features.")
 
             remove = st.multiselect("Remove Specific Features", st.session_state['features_list'],\
@@ -399,7 +407,19 @@ def analysis_page():
 
         with st.expander("Feature Importance",expanded=True):
             chosen = selector(st.session_state['numeric_df'],target,algo,cat_or_cont,remove,filter_contains)
-            st.write(chosen[:num_features])
+            st.write(chosen[:int(num_features)])
+
+        stat_expander = st.sidebar.expander('Statistical Tests')
+        stat_test = stat_expander.selectbox("Test Type",['Boschloo (2 groups)'])
+        if stat_expander.button('Run Test'):
+            if stat_test == 'Boschloo (2 groups)':
+                boschloos_test()
+                
+        if 'stat_results' in st.session_state:
+            with st.expander("Statistical Tests",expanded=True):
+                for result in st.session_state['stat_results']:
+                    st.write(result)
+
         
     
 
@@ -429,6 +449,7 @@ PAGES[page]()
 
 # ---- PART 2 ----
 # Check swithching from demo to regular and back
+# handle case when # of group names is not exactly 2
 
 
 # ---- GENERAL ----
