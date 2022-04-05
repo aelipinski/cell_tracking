@@ -8,6 +8,8 @@ import numpy as np
 from feature_select import FeatureSelector
 import re
 import scipy.stats as stats
+import matplotlib.pyplot as plt 
+import seaborn as sns
 
 # ----------------------------------- FUNCTIONS -----------------------------------
 
@@ -102,8 +104,14 @@ def boschloos_test():
     df = st.session_state['input_df']
     df = df[df.GROUP_ID != 0]
     contingency_table  = pd.crosstab(df['GROUP_NAME'],df['meta_vidID'])
-    exact = stats.boschloo_exact(contingency_table, alternative = 'greater')
-    st.session_state['stat_results'] = (contingency_table,exact.pvalue)
+    exact = stats.boschloo_exact(contingency_table, alternative = 'two-sided')
+    alpha = 0.05
+    if exact.pvalue > alpha:
+        pval_string = 'The two groups are **NOT** significantly different [P-value = {}, Alpha = 0.05]'.format(round(exact.pvalue,2))
+    else:
+        pval_string = 'The two groups are significantly different [P-value = {}, Alpha = 0.05]'.format(round(exact.pvalue,2))
+    # st.session_state['stat_results'] = (contingency_table,exact.pvalue)
+    st.session_state['stat_results'] = (contingency_table,pval_string)
 
 @st.experimental_memo(suppress_st_warning=True,show_spinner=True)
 def selector(df,target,algo,cat_or_cont,remove,filter_contains):
@@ -126,6 +134,48 @@ def selector(df,target,algo,cat_or_cont,remove,filter_contains):
         rank = rank['Feature'].tolist()
     # return pd.DataFrame(rank,columns=['Feature'])
     return rank
+
+def joint_distribution(target,focus,include_ungrouped):
+    df = st.session_state['numeric_df']
+    if include_ungrouped == False:
+        df = df[df.GROUP_ID != 0]
+    x = df[focus]
+    y = df[target]
+    zx = np.abs(stats.zscore(x))
+    zy = np.abs(stats.zscore(y))
+    xind = np.where(zx < 3)[0]
+    yind = np.where(zy < 3)[0]
+    indices = list(set(xind) & set(yind) )
+    x = x.iloc[indices]
+    y = y.iloc[indices]
+    plot_dict = {focus:x,target:y}
+    plot_df = pd.DataFrame(plot_dict)
+    fig, ax = plt.subplots(1,3,figsize = (12,4))
+    ax[0].hist(x,bins="scott",color="#F63366")
+    ax[0].set_xlabel(focus)
+    ax[0].set_title("Selected Feature")
+    sns.kdeplot(ax=ax[1],data=plot_df,x=focus, y=target,color="#F63366")
+    ax[1].set_title("Selected vs Target")
+    ax[2].hist(y,bins="scott",color="#F63366",orientation="horizontal")
+    ax[2].set_xlabel(target)
+    ax[2].set_title("Target Feature")
+    fig.tight_layout()
+    return st.pyplot(fig)
+
+def violin_plots(target,focus,include_ungrouped):
+    target='GROUP_NAME'
+    df = st.session_state['input_df']
+    if include_ungrouped == False:
+        df = df[df.GROUP_ID != 0]
+    fig, ax = plt.subplots(1,1,figsize = (12,4))
+    if len(df.meta_vidID.unique()) == 2:
+        split_val = True
+    else:
+        split_val = False
+    ax = sns.violinplot(x=target, y=focus, hue="meta_vidID", data=df, \
+        palette='muted', split=split_val, scale="count", inner=None)
+    fig.tight_layout()
+    return st.pyplot(fig)
 
 def initialize_session_state_label(spots_data, track_data, img_height, scale_factor):
     # Used to reset all the session states values upon start-up or when the 'reset' button is clicked on 'Label' page
@@ -420,8 +470,18 @@ def analysis_page():
                 for result in st.session_state['stat_results']:
                     st.write(result)
 
+        visual_expander = st.sidebar.expander('Exploratory Analysis')
+        visual_select = visual_expander.selectbox('Visualization',['Joint Distribution','Violin Plots'])
+        include_ungrouped = visual_expander.checkbox('Include Ungrouped Tracks',False)
+        if visual_select in ('Joint Distribution','Violin Plots'):
+            focus = visual_expander.selectbox('Comparison Feature',st.session_state['features_list'])
+        if visual_expander.button('Display'):
+            with st.expander('Exploratory Analysis',expanded=True):
+                if visual_select == 'Joint Distribution':
+                    joint_distribution(target,focus,include_ungrouped)
+                elif visual_select == 'Violin Plots':
+                    violin_plots(target,focus,include_ungrouped)
         
-    
 
 # ----------------------------------- Run the app -----------------------------------
 
@@ -450,6 +510,9 @@ PAGES[page]()
 # ---- PART 2 ----
 # Check swithching from demo to regular and back
 # handle case when # of group names is not exactly 2
+# Add summary table ***
+# Figure out GROUP_ID vs GROUP_Name numeric issue ***
+# Make plots persistent like stat results and use multi-check option ***
 
 
 # ---- GENERAL ----
