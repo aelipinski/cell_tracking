@@ -195,6 +195,8 @@ def initialize_session_state_analysis(input_data):
     st.session_state['input_df'] = combine_data(input_data)
     st.session_state['numeric_df'] = st.session_state['input_df'].select_dtypes(['number'])
     st.session_state['features_list'] = st.session_state['numeric_df'].columns
+    regex_meta = re.compile('meta', re.IGNORECASE)
+    st.session_state['features_no_meta'] = [i for i in st.session_state['features_list'] if not regex_meta.match(i)]
     st.experimental_rerun()
 
 # ----------------------------------- PAGE 1: Labeling  -----------------------------------
@@ -474,7 +476,7 @@ def analysis_page():
         visual_select = visual_expander.selectbox('Visualization',['Joint Distribution','Violin Plots'])
         include_ungrouped = visual_expander.checkbox('Include Ungrouped Tracks',False)
         if visual_select in ('Joint Distribution','Violin Plots'):
-            focus = visual_expander.selectbox('Comparison Feature',st.session_state['features_list'])
+            focus = visual_expander.selectbox('Comparison Feature',st.session_state['features_no_meta']) #features_list
         if visual_expander.button('Display'):
             with st.expander('Exploratory Analysis',expanded=True):
                 if visual_select == 'Joint Distribution':
@@ -500,19 +502,31 @@ PAGES[page]()
 
 # ---- PART 1 ----
 # Add convexity checker
-# Save pre-made configurations ***
-# Change spots column names ***
+# Save pre-made configurations 
+# Improve column name formatting (all caps)
 # Wrap calculation in functions with st.experimental_memo (leave out markdown parts)
-# Display Group metrics (number of tracks in group, aggregage stats, etc) 
-# Check swithching from demo to regular and back
+# Improve group summary (add columns, make visible by default)
+# allow individual group deletion 
+# add subtitle/description to page explaining purpose 
 # Provide default name to group name if left blank ***
+# add additional metadata fields and default values from Peter ***
+# Make ungrouped zero index for summary ***
+# Automate meta dictionary creation ***
 
 # ---- PART 2 ----
 # Check swithching from demo to regular and back
-# handle case when # of group names is not exactly 2
+# add subtitle/description to page explaining purpose 
+# handle case when # of group names is not exactly 2 (select 2 videos if there's more than 2) or 2-way ANOVA
+# Logistic Regression to predict group membership based on cell + device attributes 
+# Kruskall Wallis for ordinal groups
 # Add summary table ***
+# Add optional button to remove geometric fields from feature importance (On by default) ***
 # Figure out GROUP_ID vs GROUP_Name numeric issue ***
 # Make plots persistent like stat results and use multi-check option ***
+# remove meta fields for violin plots ***
+# Add box plots
+# Run all combinations of boschloo 
+# Add stacked bar graph of groups (both absolute and set to 100% relative)
 
 
 # ---- GENERAL ----
