@@ -10,6 +10,7 @@ import re
 import scipy.stats as stats
 import matplotlib.pyplot as plt 
 import seaborn as sns
+from datetime import datetime
 
 # ----------------------------------- FUNCTIONS -----------------------------------
 
@@ -91,6 +92,7 @@ def prepare_export(metadata_dict):
     # Merges track_df and the grouped spots_df using 'TRACK_ID' as key
     export_df = pd.merge(st.session_state['track_df'],spots_agg_df,on='TRACK_ID')
     export_df.loc[export_df['GROUP_ID'].isna(),['GROUP_ID','GROUP_NAME']] = [0,"Ungrouped"]
+    export_df = export_df.drop(columns=['index','TRACK_INDEX'])
     # Converts to csv for final export 
     return export_df.to_csv(index=False)
 
@@ -181,14 +183,16 @@ def initialize_session_state_label(spots_data, track_data, img_height, scale_fac
     # Used to reset all the session states values upon start-up or when the 'reset' button is clicked on 'Label' page
     st.session_state['count'] = 1
     st.session_state['groups'] = dict()
-    st.session_state['group_stats'] = pd.DataFrame(columns=["Group ID", "Group Name", "Number of Tracks"])
+    st.session_state['group_stats'] = pd.DataFrame(columns=["Group Name", "Number of Tracks"])
     st.session_state['selections'] = dict.fromkeys(['im','draw'])
     st.session_state.selections['im'] = Image.new('RGB', (800, int(img_height/scale_factor)), (240, 242, 246))
     st.session_state.selections['draw'] = ImageDraw.Draw(st.session_state.selections['im'])
     st.session_state['spots_df'], st.session_state['spots_array'] = process_spots_data(spots_data)
     st.session_state['track_df'] = process_track_data(track_data)   
+    st.session_state.group_stats.loc[0] = ['Ungrouped', sum(pd.isna(st.session_state.track_df['GROUP_ID']))]
     st.session_state['output_options'] = ['All Groups','Ungrouped']
     st.session_state['calib_angle'] = 0.0
+    st.session_state['default_vid_id'] = 'vid_' + datetime.today().strftime('%y%m%d_%H%M%S')
     st.experimental_rerun()
 
 def initialize_session_state_analysis(input_data):
@@ -245,29 +249,35 @@ def label_page():
 
         # Specify metadata that applies to entire video 
         with st.sidebar.expander('Video Metadata'):
-            vid_id = st.text_input("Video ID")
-            ridge_angle = st.number_input("Ridge Angle (deg)")
+            vid_id = st.text_input("Video ID",value=st.session_state['default_vid_id'])
+            vid_date = st.date_input("Date", datetime.today())
+            frame_rate = st.number_input("Frame Rate (fps)",value=3000)
+            flow_direction = st.selectbox("Flow Direction",['Left','Right'])
+            ridge_angle = st.number_input("Ridge Angle (deg)",value=15.0)
 
             # Calculate and display calibrated angle and true angle 
             st.write("Calibration angle:",round(st.session_state.calib_angle,2))
             true_angle = st.session_state.calib_angle + ridge_angle
             st.write("True angle:",round(true_angle,2))
 
-            ridge_number = st.number_input("Ridge Number",min_value=1, max_value=10, step=1)
-            ridge_spacing = st.number_input("Ridge Spacing (um)")
-            ridge_width = st.number_input("Ridge Width (um)")
+            ridge_number = st.number_input("Ridge Number",value=5,min_value=1, max_value=10, step=1)
+            ridge_spacing = st.number_input("Ridge Spacing (um)",value=240)
+            ridge_width = st.number_input("Ridge Width (um)",value=20)
             ridge_design = st.selectbox("Ridge Design",['Straight','Chevron'])
-            gap_size = st.number_input("Gap Size (um)")
-            gutter_number = st.selectbox("Gutter Number",[0,1,2])
-            gutter_size = st.number_input("Gutter Size (um)")
-            channel_width = st.number_input("Channel Width (um)")
-            flowrate = st.number_input("Fluid Flowrate (uL/min)")
-            sheath_number = st.selectbox("Sheath Number",[0,1,2])
-            media = st.selectbox("Media", ['Media', 'Flow Buffer', 'Other'])	
-            cell_conc = st.number_input('Cell Concentration (million cells/mL)')
+            gap_size = st.number_input("Gap Size (um)",value=5)
+            gutter_number = st.number_input("Gutter Number",value=2,min_value=0, max_value=2, step=1)
+            gutter_size = st.number_input("Gutter Size (um)",value=80)
+            channel_width = st.number_input("Channel Width (um)",value=560)
+            flowrate = st.number_input("Fluid Flowrate (uL/min)",value=25)
+            sheath_number = st.number_input("Sheath Number",value=2,min_value=0, max_value=2, step=1)
+            media = st.selectbox("Media", ['Media', 'Flow Buffer', 'Other'],index=1)	
+            cell_conc = st.number_input('Cell Concentration (million cells/mL)',value=1.0)
 
             metadata_dict = {
                 "meta_vidID":vid_id,
+                "meta_date":vid_date,
+                "meta_flow_direction":flow_direction,
+                "meta_frame_rate":frame_rate,
                 "meta_ridge_angle":ridge_angle,
                 "meta_calib_angle":st.session_state.calib_angle,
                 "meta_true_angle":true_angle,
@@ -287,10 +297,12 @@ def label_page():
             
         # Specify canvas parameters in application
         with st.sidebar.expander("Drawing Options"):
-            draw_mode = st.radio("Mode",("Labeling","Calibration"))
+            draw_mode = st.selectbox("Mode",("Labeling","Calibration"))
+            output_groups = st.selectbox("Select Group to Display",st.session_state.output_options) 
             if draw_mode == "Labeling":
                 label_type = st.radio("Label Type", ("Include","Exclude"))  
-                group_name = st.text_input("Label Name", help="Add name for group")            
+                default_group_name = "group_"+str(st.session_state['count'])
+                group_name = st.text_input("Label Name", value= default_group_name, help="Add name for group")      
 
         # Create drawing canvas using API
         canvas_result = st_canvas(
@@ -303,7 +315,7 @@ def label_page():
             height=img_height/scale_factor,
             width = 800,
             drawing_mode=poly_type[draw_mode],
-            key=draw_mode
+            key="main"
         )
 
         if draw_mode == "Labeling":
@@ -350,13 +362,14 @@ def label_page():
                 color = output_colors[(group_id-1) % len(output_colors)]
                 st.session_state.groups[group_id]['color'] = color
                 st.session_state.selections['draw'].point(coords, fill=color)
-                st.session_state.group_stats.loc[group_id-1] = [group_id, group_name, len(track_set)]
+                st.session_state.group_stats.loc[group_id] = [group_name, len(track_set)]
                 st.session_state.track_df.loc[st.session_state.track_df['TRACK_ID'].isin(track_set),['GROUP_ID','GROUP_NAME']] = [group_id, group_name]
-                st.session_state.group_stats.loc[len(st.session_state.group_stats)] = [len(st.session_state.group_stats)+1, 'Ungrouped', sum(pd.isna(st.session_state.track_df['GROUP_ID']))]
-                st.session_state.output_options.append(group_id)
+                st.session_state.group_stats.loc[0] = ['Ungrouped', sum(pd.isna(st.session_state.track_df['GROUP_ID']))]
+                st.session_state.output_options.append(group_name)
 
                 # Increment the group ID
                 st.session_state.count += 1
+                st.experimental_rerun()
         else:
             if st.button('Calibrate Angle'):
                 # Only creates calibration angle if a single line is drawn
@@ -375,11 +388,6 @@ def label_page():
                 # If zero or multiple lines are drawn, warns user to correct it
                 else:
                     st.write("Please create exactly 1 line.")
-
-
-        with st.sidebar.expander("Display Settings"):
-            show_stats = st.checkbox('Show Group Summary',False)
-            output_groups = st.selectbox("Select Group to Display",st.session_state.output_options)
 
         # Add Export and Reset Buttons side by side
         col1, col2 = st.sidebar.columns([1,2])
@@ -417,9 +425,8 @@ def label_page():
             draw_single.point(st.session_state.groups[output_groups]['points'], fill = st.session_state.groups[output_groups]['color'])
             st.image(im_single)
 
-        if len(st.session_state['groups']) > 0 and show_stats:
-            st.write('### Group Summary')
-            st.dataframe(st.session_state.group_stats)
+        st.write('### Group Summary')
+        st.dataframe(st.session_state.group_stats)
 
 # ----------------------------------- PAGE 2: Analysis -----------------------------------
 
@@ -505,13 +512,11 @@ PAGES[page]()
 # Save pre-made configurations 
 # Improve column name formatting (all caps)
 # Wrap calculation in functions with st.experimental_memo (leave out markdown parts)
-# Improve group summary (add columns, make visible by default)
+# Improve group summary (add columns)
 # allow individual group deletion 
 # add subtitle/description to page explaining purpose 
-# Provide default name to group name if left blank ***
-# add additional metadata fields and default values from Peter ***
-# Make ungrouped zero index for summary ***
-# Automate meta dictionary creation ***
+# Automate meta dictionary creation 
+# Add calibrate button confirmation (show calib angle after click)
 
 # ---- PART 2 ----
 # Check swithching from demo to regular and back
@@ -530,4 +535,5 @@ PAGES[page]()
 
 
 # ---- GENERAL ----
+# Add help popup for all streamlit widgets 
 # write manual
