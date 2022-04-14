@@ -352,15 +352,15 @@ def label_page():
 
                 # Aadd the track set and groupd name to the session state 
                 group_id = st.session_state.count
-                st.session_state.groups[group_id] = {'name':group_name, 'tracks':track_set}
+                st.session_state.groups[group_name] = {'tracks':track_set}
 
                 # Add output drawing for current group to the session state with a random color 
                 # Draws all points for the tracks belonging to the group s
                 draw_points = st.session_state.spots_df[st.session_state.spots_df['TRACK_ID'].isin(track_set)]
                 coords = tuple(zip(draw_points.POSITION_X.astype(float)/scale_factor,draw_points.POSITION_Y.astype(float)/scale_factor))
-                st.session_state.groups[group_id]['points'] = coords
+                st.session_state.groups[group_name]['points'] = coords
                 color = output_colors[(group_id-1) % len(output_colors)]
-                st.session_state.groups[group_id]['color'] = color
+                st.session_state.groups[group_name]['color'] = color
                 st.session_state.selections['draw'].point(coords, fill=color)
                 st.session_state.group_stats.loc[group_id] = [group_name, len(track_set)]
                 st.session_state.track_df.loc[st.session_state.track_df['TRACK_ID'].isin(track_set),['GROUP_ID','GROUP_NAME']] = [group_id, group_name]
