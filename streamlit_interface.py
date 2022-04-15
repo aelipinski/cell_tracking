@@ -179,6 +179,25 @@ def violin_plots(target,focus,include_ungrouped):
     fig.tight_layout()
     return st.pyplot(fig)
 
+def make_stacked_bars():
+    df = st.session_state['input_df']
+    agg_df = df.groupby(['meta_vidID','GROUP_NAME']).count()['LABEL'].reset_index()
+    agg_df.columns = ['File','Group','Count']
+    agg_df = agg_df.pivot(index="File", columns="Group", values="Count").fillna(0)
+    agg_df = agg_df.drop(columns=['Ungrouped'])
+    fig, ax = plt.subplots(1,1,figsize = (10,4))
+    agg_df.astype(int).plot.barh(stacked=True,ax=ax)
+    fig.tight_layout()
+    return fig
+
+def get_metadata_summary():
+    df = st.session_state['input_df']
+    regex_meta = re.compile('meta', re.IGNORECASE)
+    meta_cols = [i for i in df.columns if regex_meta.match(i)]
+    df = df[meta_cols].drop_duplicates()
+    df = df.set_index('meta_vidID')
+    return df 
+
 def initialize_session_state_label(spots_data, track_data, img_height, scale_factor):
     # Used to reset all the session states values upon start-up or when the 'reset' button is clicked on 'Label' page
     st.session_state['count'] = 1
@@ -201,6 +220,8 @@ def initialize_session_state_analysis(input_data):
     st.session_state['features_list'] = st.session_state['numeric_df'].columns
     regex_meta = re.compile('meta', re.IGNORECASE)
     st.session_state['features_no_meta'] = [i for i in st.session_state['features_list'] if not regex_meta.match(i)]
+    st.session_state['stacked_bars'] = make_stacked_bars()
+    st.session_state['metadata'] = get_metadata_summary()
     st.experimental_rerun()
 
 # ----------------------------------- PAGE 1: Labeling  -----------------------------------
@@ -434,7 +455,12 @@ def analysis_page():
     # Add CSV uploaders within expander 
     with st.sidebar.expander('Load Data'):
         if st.checkbox('Demo Mode',on_change=clear_session_state):
-            input_data = ["demo/demo1.csv","demo/demo2.csv"]
+            input_data = [
+                'demo/bsa.csv',
+                'demo/20_10_20.csv',
+                'demo/30_15_30.csv',
+                'demo/10_5_10.csv'
+            ]
         else:
             input_data = st.file_uploader("Upload Labeled Tracking Data",type='csv',accept_multiple_files=True, \
                 help="Data must be a CSV file exported from the 'Labeling and Annotation page'.")
@@ -443,6 +469,10 @@ def analysis_page():
         # Initialize session state variables 
         if 'input_df' not in st.session_state:
             initialize_session_state_analysis(input_data)
+        
+        with st.expander('Data Summary',expanded=True):
+            st.pyplot(st.session_state['stacked_bars'])
+            st.dataframe(st.session_state['metadata'])
 
         with st.sidebar.expander('Feature Importance'):
 
@@ -519,21 +549,22 @@ PAGES[page]()
 # Add calibrate button confirmation (show calib angle after click)
 # Make output a session state image with an update variable (add if to show all or individual, updates individual) ***
 # Make scale factor and img height session state variables 
+# Round metadata files to 2 decimals before export
 
 # ---- PART 2 ----
 # Check swithching from demo to regular and back
 # add subtitle/description to page explaining purpose 
-# handle case when # of group names is not exactly 2 (select 2 videos if there's more than 2) or 2-way ANOVA
+# handle case when # of group names is not exactly 2 (select 2 videos if there's more than 2) or 2-way ANOVA ***
 # Logistic Regression to predict group membership based on cell + device attributes 
-# Kruskall Wallis for ordinal groups
+# Kruskall Wallis for ordinal groups 
 # Add summary table ***
 # Add optional button to remove geometric fields from feature importance (On by default) ***
 # Figure out GROUP_ID vs GROUP_Name numeric issue ***
 # Make plots persistent like stat results and use multi-check option ***
 # remove meta fields for violin plots ***
 # Add box plots
-# Run all combinations of boschloo 
-# Add stacked bar graph of groups (both absolute and set to 100% relative)
+# Run all combinations of boschloo or implement pairwise selector *** 
+# Add stacked bar graph of groups (both absolute and set to 100% relative) *** 
 
 
 # ---- GENERAL ----
