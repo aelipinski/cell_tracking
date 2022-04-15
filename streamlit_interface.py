@@ -102,9 +102,11 @@ def combine_data(input_data):
         df_list.append(pd.read_csv(csv))
     return pd.concat(df_list)
 
-def boschloos_test():
+@st.experimental_memo(suppress_st_warning=True,show_spinner=True)
+def boschloos_test(bosch_vid1,bosch_vid2,bosch_group1,bosch_group2):
     df = st.session_state['input_df']
-    df = df[df.GROUP_ID != 0]
+    df = df[df['meta_vidID'].isin([bosch_vid1,bosch_vid2])]
+    df = df[df['GROUP_NAME'].isin([bosch_group1,bosch_group2])]
     contingency_table  = pd.crosstab(df['GROUP_NAME'],df['meta_vidID'])
     exact = stats.boschloo_exact(contingency_table, alternative = 'two-sided')
     alpha = 0.05
@@ -112,8 +114,23 @@ def boschloos_test():
         pval_string = 'The two groups are **NOT** significantly different [P-value = {}, Alpha = 0.05]'.format(round(exact.pvalue,2))
     else:
         pval_string = 'The two groups are significantly different [P-value = {}, Alpha = 0.05]'.format(round(exact.pvalue,2))
-    # st.session_state['stat_results'] = (contingency_table,exact.pvalue)
-    st.session_state['stat_results'] = (contingency_table,pval_string)
+    st.session_state['bosch_results'] = ('*Boschloo 2x2 Test*',contingency_table,pval_string)
+
+# @st.experimental_memo(suppress_st_warning=True,show_spinner=True)
+# def z_test(z_group1,z_group2,focus):
+#     df = st.session_state['input_df']
+#     df = df[df['meta_vidID'].isin([bosch_vid1,bosch_vid2])]
+#     df = df[df['GROUP_NAME'].isin([bosch_group1,bosch_group2])]
+#     contingency_table  = pd.crosstab(df['GROUP_NAME'],df['meta_vidID'])
+#     exact = stats.boschloo_exact(contingency_table, alternative = 'two-sided')
+#     alpha = 0.05
+#     if exact.pvalue > alpha:
+#         pval_string = 'The two groups are **NOT** significantly different [P-value = {}, Alpha = 0.05]'.format(round(exact.pvalue,2))
+#     else:
+#         pval_string = 'The two groups are significantly different [P-value = {}, Alpha = 0.05]'.format(round(exact.pvalue,2))
+#     # st.session_state['stat_results'] = (contingency_table,exact.pvalue)
+#     st.session_state['bosch_results'] = ('*Boschloo 2x2 Test*',contingency_table,pval_string)
+#     # return st.write(contingency_table),st.write(pval_string)
 
 @st.experimental_memo(suppress_st_warning=True,show_spinner=True)
 def selector(df,target,algo,cat_or_cont,remove,filter_contains):
@@ -137,48 +154,61 @@ def selector(df,target,algo,cat_or_cont,remove,filter_contains):
     # return pd.DataFrame(rank,columns=['Feature'])
     return rank
 
-def joint_distribution(target,focus,include_ungrouped):
-    df = st.session_state['numeric_df']
-    if include_ungrouped == False:
-        df = df[df.GROUP_ID != 0]
-    x = df[focus]
-    y = df[target]
-    zx = np.abs(stats.zscore(x))
-    zy = np.abs(stats.zscore(y))
-    xind = np.where(zx < 3)[0]
-    yind = np.where(zy < 3)[0]
-    indices = list(set(xind) & set(yind) )
-    x = x.iloc[indices]
-    y = y.iloc[indices]
-    plot_dict = {focus:x,target:y}
-    plot_df = pd.DataFrame(plot_dict)
-    fig, ax = plt.subplots(1,3,figsize = (12,4))
-    ax[0].hist(x,bins="scott",color="#F63366")
-    ax[0].set_xlabel(focus)
-    ax[0].set_title("Selected Feature")
-    sns.kdeplot(ax=ax[1],data=plot_df,x=focus, y=target,color="#F63366")
-    ax[1].set_title("Selected vs Target")
-    ax[2].hist(y,bins="scott",color="#F63366",orientation="horizontal")
-    ax[2].set_xlabel(target)
-    ax[2].set_title("Target Feature")
-    fig.tight_layout()
-    return st.pyplot(fig)
+# def joint_distribution(focus,include_ungrouped,vid_selection):
+#     target = 'GROUP_ID'
+#     df = st.session_state['numeric_df']
+#     df = df[st.session_state['input_df']['meta_vidID'].isin(vid_selection)]
+#     if include_ungrouped == False:
+#         df = df[df.GROUP_ID != 0]
+#     x = df[focus]
+#     y = df[target]
+#     zx = np.abs(stats.zscore(x))
+#     zy = np.abs(stats.zscore(y))
+#     xind = np.where(zx < 10)[0]
+#     yind = np.where(zy < 10)[0]
+#     indices = list(set(xind) & set(yind) )
+#     x = x.iloc[indices]
+#     y = y.iloc[indices]
+#     plot_dict = {focus:x,target:y}
+#     plot_df = pd.DataFrame(plot_dict)
+#     fig, ax = plt.subplots(1,3,figsize = (12,4))
+#     ax[0].hist(x,bins="scott",color="#F63366")
+#     ax[0].set_xlabel(focus)
+#     ax[0].set_title("Selected Feature")
+#     sns.kdeplot(ax=ax[1],data=plot_df,x=focus, y=target,color="#F63366")
+#     ax[1].set_title("Selected vs Target")
+#     ax[2].hist(y,bins="scott",color="#F63366",orientation="horizontal")
+#     ax[2].set_xlabel(target)
+#     ax[2].set_title("Target Feature")
+#     fig.tight_layout()
+#     return st.pyplot(fig)
 
-def violin_plots(target,focus,include_ungrouped):
+# @st.experimental_memo(suppress_st_warning=True,show_spinner=True)
+def violin_plots(focus,include_ungrouped, vid_selection, violin_legend, remove_outliers):
     target='GROUP_NAME'
     df = st.session_state['input_df']
+    df = df[st.session_state['input_df']['meta_vidID'].isin(vid_selection)]
     if include_ungrouped == False:
         df = df[df.GROUP_ID != 0]
-    fig, ax = plt.subplots(1,1,figsize = (12,4))
+    fig, ax = plt.subplots(1,1,figsize = (10,6))
     if len(df.meta_vidID.unique()) == 2:
         split_val = True
     else:
         split_val = False
-    ax = sns.violinplot(x=target, y=focus, hue="meta_vidID", data=df, \
-        palette='muted', split=split_val, scale="count", inner=None)
+    if violin_legend:
+        hue_val = "meta_vidID"
+    else:
+        hue_val = None
+    if remove_outliers:
+        z = np.abs(stats.zscore(df[focus]))
+        z_ind = np.where(z < 2)[0]
+        df = df.iloc[z_ind]
+    ax = sns.violinplot(x=target, y=focus, hue=hue_val, data=df, \
+        palette='muted', split=split_val, scale="count", inner='box')
     fig.tight_layout()
     return st.pyplot(fig)
 
+@st.experimental_memo(suppress_st_warning=True,show_spinner=True)
 def make_stacked_bars():
     df = st.session_state['input_df']
     agg_df = df.groupby(['meta_vidID','GROUP_NAME']).count()['LABEL'].reset_index()
@@ -190,12 +220,14 @@ def make_stacked_bars():
     fig.tight_layout()
     return fig
 
+@st.experimental_memo(suppress_st_warning=True,show_spinner=True)
 def get_metadata_summary():
     df = st.session_state['input_df']
     regex_meta = re.compile('meta', re.IGNORECASE)
     meta_cols = [i for i in df.columns if regex_meta.match(i)]
     df = df[meta_cols].drop_duplicates()
     df = df.set_index('meta_vidID')
+    df.columns = [' '.join(i.split('_')[1:]).capitalize() for i in df.columns]
     return df 
 
 def initialize_session_state_label(spots_data, track_data, img_height, scale_factor):
@@ -222,6 +254,9 @@ def initialize_session_state_analysis(input_data):
     st.session_state['features_no_meta'] = [i for i in st.session_state['features_list'] if not regex_meta.match(i)]
     st.session_state['stacked_bars'] = make_stacked_bars()
     st.session_state['metadata'] = get_metadata_summary()
+    st.session_state['vid_list'] = st.session_state['input_df']['meta_vidID'].unique()
+    pairs = st.session_state['input_df'][['GROUP_ID','GROUP_NAME']].drop_duplicates()
+    st.session_state['groups_dict'] = dict(list(zip(pairs['GROUP_ID'],pairs['GROUP_NAME'])))
     st.experimental_rerun()
 
 # ----------------------------------- PAGE 1: Labeling  -----------------------------------
@@ -476,9 +511,6 @@ def analysis_page():
 
         with st.sidebar.expander('Feature Importance'):
 
-            target = st.selectbox("Target Feature",['GROUP_NAME','GROUP_ID'],index=1, \
-                help = "Features will be selected with the ultimate goal of estimating this target feature.")
-
             cat_or_cont = st.selectbox("Target Data Type",("Categorical", "Continuous"),index=0,\
                 help = "This will help determine which type of algorithm to run - classification or regression.")
 
@@ -495,31 +527,39 @@ def analysis_page():
                 help = "MRMR: good for redundant data, Mutual Info: good for non-linear data with few redundant variables or when redundancy doesn't matter.")
 
         with st.expander("Feature Importance",expanded=True):
-            chosen = selector(st.session_state['numeric_df'],target,algo,cat_or_cont,remove,filter_contains)
+            chosen = selector(st.session_state['numeric_df'],'GROUP_ID',algo,cat_or_cont,remove,filter_contains)
             st.write(chosen[:int(num_features)])
 
-        stat_expander = st.sidebar.expander('Statistical Tests')
+        visual_expander = st.sidebar.expander('Distribution Plots')
+        vid_selection_violin = visual_expander.multiselect("Included Files",st.session_state['vid_list'],st.session_state['vid_list'],key='violin')
+        # show_joint = visual_expander.checkbox('Show Joint Distribution',True)
+        # joint_focus = visual_expander.selectbox('Joint Distribution Feature',st.session_state['features_list']) 
+        # show_violin = visual_expander.checkbox('Show Violin Plots',True)
+        violin_focus = visual_expander.selectbox('Violin Plot Feature',st.session_state['features_no_meta']) 
+        violin_legend = visual_expander.checkbox('Split by File', True)
+        remove_outliers = visual_expander.checkbox('Remove Outliers', True)
+        include_ungrouped = visual_expander.checkbox('Include Ungrouped Tracks',False)
+        with st.expander('Distribution Plots',expanded=True):
+            # if show_joint:
+            #     joint_distribution(joint_focus,include_ungrouped,vid_selection)
+            # if show_violin:
+            violin_plots(violin_focus,include_ungrouped,vid_selection_violin,violin_legend,remove_outliers)
+        
+        stat_expander = st.sidebar.expander('Statistical Test')
         stat_test = stat_expander.selectbox("Test Type",['Boschloo (2 groups)'])
+        if stat_test == 'Boschloo (2 groups)':
+            bosch_vid1 = stat_expander.selectbox('File #1',st.session_state['vid_list'],index=0)
+            bosch_vid2 = stat_expander.selectbox('File #2',st.session_state['vid_list'],index=1)
+            bosch_group1 = stat_expander.selectbox('Group #1',st.session_state['groups_dict'].values(),index=0)
+            bosch_group2 = stat_expander.selectbox('Group #2',st.session_state['groups_dict'].values(),index=1)
         if stat_expander.button('Run Test'):
             if stat_test == 'Boschloo (2 groups)':
-                boschloos_test()
+                boschloos_test(bosch_vid1,bosch_vid2,bosch_group1,bosch_group2)
                 
-        if 'stat_results' in st.session_state:
-            with st.expander("Statistical Tests",expanded=True):
-                for result in st.session_state['stat_results']:
+        if 'bosch_results' in st.session_state:
+            with st.expander("Statistical Test",expanded=True):
+                for result in st.session_state['bosch_results']:
                     st.write(result)
-
-        visual_expander = st.sidebar.expander('Exploratory Analysis')
-        visual_select = visual_expander.selectbox('Visualization',['Joint Distribution','Violin Plots'])
-        include_ungrouped = visual_expander.checkbox('Include Ungrouped Tracks',False)
-        if visual_select in ('Joint Distribution','Violin Plots'):
-            focus = visual_expander.selectbox('Comparison Feature',st.session_state['features_no_meta']) #features_list
-        if visual_expander.button('Display'):
-            with st.expander('Exploratory Analysis',expanded=True):
-                if visual_select == 'Joint Distribution':
-                    joint_distribution(target,focus,include_ungrouped)
-                elif visual_select == 'Violin Plots':
-                    violin_plots(target,focus,include_ungrouped)
         
 
 # ----------------------------------- Run the app -----------------------------------
@@ -552,19 +592,14 @@ PAGES[page]()
 # Round metadata files to 2 decimals before export
 
 # ---- PART 2 ----
-# Check swithching from demo to regular and back
 # add subtitle/description to page explaining purpose 
-# handle case when # of group names is not exactly 2 (select 2 videos if there's more than 2) or 2-way ANOVA ***
+# handle case when # of group names is not exactly 2 (select 2 groups if there's more than 2) or 2-way ANOVA 
 # Logistic Regression to predict group membership based on cell + device attributes 
 # Kruskall Wallis for ordinal groups 
-# Add summary table ***
-# Add optional button to remove geometric fields from feature importance (On by default) ***
-# Figure out GROUP_ID vs GROUP_Name numeric issue ***
-# Make plots persistent like stat results and use multi-check option ***
-# remove meta fields for violin plots ***
-# Add box plots
-# Run all combinations of boschloo or implement pairwise selector *** 
-# Add stacked bar graph of groups (both absolute and set to 100% relative) *** 
+# Remove nonsense fields (ID, index, etc)
+# Add optional button to remove geometric fields from feature importance (On by default) 
+# t-test for means between groups and between videos ***
+# Run all combinations of boschloo or implement pairwise selector 
 
 
 # ---- GENERAL ----
