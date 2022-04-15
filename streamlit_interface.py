@@ -264,7 +264,7 @@ def label_page():
             ridge_spacing = st.number_input("Ridge Spacing (um)",value=240)
             ridge_width = st.number_input("Ridge Width (um)",value=20)
             ridge_design = st.selectbox("Ridge Design",['Straight','Chevron'])
-            gap_size = st.number_input("Gap Size (um)",value=5)
+            gap_size = st.number_input("Gap Size (um)",value=5.0)
             gutter_number = st.number_input("Gutter Number",value=2,min_value=0, max_value=2, step=1)
             gutter_size = st.number_input("Gutter Size (um)",value=80)
             channel_width = st.number_input("Channel Width (um)",value=560)
@@ -517,6 +517,8 @@ PAGES[page]()
 # add subtitle/description to page explaining purpose 
 # Automate meta dictionary creation 
 # Add calibrate button confirmation (show calib angle after click)
+# Make output a session state image with an update variable (add if to show all or individual, updates individual) ***
+# Make scale factor and img height session state variables 
 
 # ---- PART 2 ----
 # Check swithching from demo to regular and back
