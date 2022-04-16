@@ -114,34 +114,37 @@ def boschloos_test(bosch_vid1,bosch_vid2,bosch_group1,bosch_group2):
         pval_string = 'The two groups are **NOT** significantly different [P-value = {}, Alpha = 0.05]'.format(round(exact.pvalue,2))
     else:
         pval_string = 'The two groups are significantly different [P-value = {}, Alpha = 0.05]'.format(round(exact.pvalue,2))
-    st.session_state['bosch_results'] = ('*Boschloo 2x2 Test*',contingency_table,pval_string)
-
-# @st.experimental_memo(suppress_st_warning=True,show_spinner=True)
-# def z_test(z_group1,z_group2,focus):
-#     df = st.session_state['input_df']
-#     df = df[df['meta_vidID'].isin([bosch_vid1,bosch_vid2])]
-#     df = df[df['GROUP_NAME'].isin([bosch_group1,bosch_group2])]
-#     contingency_table  = pd.crosstab(df['GROUP_NAME'],df['meta_vidID'])
-#     exact = stats.boschloo_exact(contingency_table, alternative = 'two-sided')
-#     alpha = 0.05
-#     if exact.pvalue > alpha:
-#         pval_string = 'The two groups are **NOT** significantly different [P-value = {}, Alpha = 0.05]'.format(round(exact.pvalue,2))
-#     else:
-#         pval_string = 'The two groups are significantly different [P-value = {}, Alpha = 0.05]'.format(round(exact.pvalue,2))
-#     # st.session_state['stat_results'] = (contingency_table,exact.pvalue)
-#     st.session_state['bosch_results'] = ('*Boschloo 2x2 Test*',contingency_table,pval_string)
-#     # return st.write(contingency_table),st.write(pval_string)
+    # st.session_state['bosch_results'] = ('*Boschloo 2x2 Test*',contingency_table,pval_string)
+    return '**Boschloo 2x2 Test**',contingency_table,pval_string
 
 @st.experimental_memo(suppress_st_warning=True,show_spinner=True)
-def selector(df,target,algo,cat_or_cont,remove,filter_contains):
+def mann_whitney(group_cat,mw_group1,mw_group2,dep_var):
+    df = st.session_state['input_df'][[group_cat,dep_var]]
+    x = df[df[group_cat] == mw_group1][dep_var]
+    y = df[df[group_cat] == mw_group2][dep_var]
+    _,pvalue = stats.mannwhitneyu(x,y)
+    alpha = 0.05
+    if pvalue > alpha:
+        pval_string = '**Result:** The distributions are **NOT** significantly different between the groups.'
+    else:
+        pval_string = '**Result** The distributions are significantly different between the groups.'
+    # st.session_state['bosch_results'] = ('*Boschloo 2x2 Test*',contingency_table,pval_string)
+    group_string = '**Groups:** {} vs. {}'.format(mw_group1,mw_group2)
+    feature_string = '**Feature:** {}'.format(dep_var)
+    pval_string2 = '[P-value = {}, Alpha = 0.05]'.format(round(pvalue,2))
+    return '**Mann-Whitney Test**',group_string,feature_string,pval_string,pval_string2
+
+
+@st.experimental_memo(suppress_st_warning=True,show_spinner=True)
+def selector(df,target,algo,cat_or_cont,remove):
     #Filters dataframe by removing the remove features before running selector
     df = df.drop(columns=remove)
-    if filter_contains:
-        try:
-            filter_regex = filter_contains.replace(" ","").replace(",","|")  
-            df = df[df.columns.drop(list(df.filter(regex=re.compile(filter_regex, re.IGNORECASE))))]
-        except:
-            st.write("Filter words must be separated by commas with no spaces or special characters.")
+    # if filter_contains:
+    #     try:
+    #         filter_regex = filter_contains.replace(" ","").replace(",","|")  
+    #         df = df[df.columns.drop(list(df.filter(regex=re.compile(filter_regex, re.IGNORECASE))))]
+    #     except:
+    #         st.write("Filter words must be separated by commas with no spaces or special characters.")
     fs = FeatureSelector(df = df, target_col = target)
     if algo == "MRMR":
         rank = fs.mrmr()
@@ -184,8 +187,7 @@ def selector(df,target,algo,cat_or_cont,remove,filter_contains):
 #     return st.pyplot(fig)
 
 # @st.experimental_memo(suppress_st_warning=True,show_spinner=True)
-def violin_plots(focus,include_ungrouped, vid_selection, violin_legend, remove_outliers):
-    target='GROUP_NAME'
+def violin_plots(focus,include_ungrouped, vid_selection, target, violin_legend, remove_outliers):
     df = st.session_state['input_df']
     df = df[st.session_state['input_df']['meta_vidID'].isin(vid_selection)]
     if include_ungrouped == False:
@@ -196,7 +198,10 @@ def violin_plots(focus,include_ungrouped, vid_selection, violin_legend, remove_o
     else:
         split_val = False
     if violin_legend:
-        hue_val = "meta_vidID"
+        if target == 'GROUP_NAME':
+            hue_val = "meta_vidID"
+        else:
+            hue_val = 'GROUP_NAME'
     else:
         hue_val = None
     if remove_outliers:
@@ -208,7 +213,6 @@ def violin_plots(focus,include_ungrouped, vid_selection, violin_legend, remove_o
     fig.tight_layout()
     return st.pyplot(fig)
 
-@st.experimental_memo(suppress_st_warning=True,show_spinner=True)
 def make_stacked_bars():
     df = st.session_state['input_df']
     agg_df = df.groupby(['meta_vidID','GROUP_NAME']).count()['LABEL'].reset_index()
@@ -220,7 +224,6 @@ def make_stacked_bars():
     fig.tight_layout()
     return fig
 
-@st.experimental_memo(suppress_st_warning=True,show_spinner=True)
 def get_metadata_summary():
     df = st.session_state['input_df']
     regex_meta = re.compile('meta', re.IGNORECASE)
@@ -256,7 +259,26 @@ def initialize_session_state_analysis(input_data):
     st.session_state['metadata'] = get_metadata_summary()
     st.session_state['vid_list'] = st.session_state['input_df']['meta_vidID'].unique()
     pairs = st.session_state['input_df'][['GROUP_ID','GROUP_NAME']].drop_duplicates()
+    pairs = pairs[pairs.GROUP_ID != 0]
     st.session_state['groups_dict'] = dict(list(zip(pairs['GROUP_ID'],pairs['GROUP_NAME'])))
+    # regex_importance = re.compile('GROUP_ID|track|number|.*location|.*displacement|.*position|.*frame|.*calib|longest|.*distance|.*speed|confinement|.*linearity|.*change', re.IGNORECASE)
+    # st.session_state['features_importance'] = [i for i in st.session_state['features_list'] if not regex_importance.match(i)]
+    st.session_state['features_importance'] = [
+        "meta_true_angle",
+        "meta_ridge_number",
+        "meta_ridge_spacing",
+        "meta_ridge_width",
+        "meta_gap_size",
+        "meta_gutter_number",
+        "meta_gutter_size",
+        "meta_channel_width",
+        "meta_flowrate",
+        "meta_sheath_number",
+        "meta_cell_conc",
+        "spots_AREA_mean",
+        "spots_MEAN_INTENSITY_CH1_mean"
+    ]
+    st.session_state['importance_df'] = st.session_state['numeric_df'][st.session_state['features_importance']+['GROUP_ID']]
     st.experimental_rerun()
 
 # ----------------------------------- PAGE 1: Labeling  -----------------------------------
@@ -511,55 +533,76 @@ def analysis_page():
 
         with st.sidebar.expander('Feature Importance'):
 
-            cat_or_cont = st.selectbox("Target Data Type",("Categorical", "Continuous"),index=0,\
-                help = "This will help determine which type of algorithm to run - classification or regression.")
+            # cat_or_cont = st.selectbox("Target Data Type",("Categorical", "Continuous"),index=0,\
+            #     help = "This will help determine which type of algorithm to run - classification or regression.")
 
             # max_num = int(len(st.session_state['features_list'])-1)
-            num_features = st.number_input("Number of Features to Select",min_value=1,max_value=10,value=5,\
+            num_features = st.number_input("Number of Features to Select",min_value=1,max_value=10,value=3,\
                 help="Consider the purpose of this feature selection. When in doubt, select a higher number of features.")
 
-            remove = st.multiselect("Remove Specific Features", st.session_state['features_list'],\
+            remove = st.multiselect("Remove Specific Features", st.session_state['features_importance'],\
                 help = "Remove certain features from the chosen features list.")
             
-            filter_contains = st.text_input("Remove Features Containing")
+            # filter_contains = st.text_input("Remove Features Containing")
 
-            algo = st.selectbox("Choose feature selection algorithm",["MRMR","Mutual Info"],\
-                help = "MRMR: good for redundant data, Mutual Info: good for non-linear data with few redundant variables or when redundancy doesn't matter.")
+            # algo = st.selectbox("Choose feature selection algorithm",["MRMR","Mutual Info"],\
+            #     help = "MRMR: good for redundant data, Mutual Info: good for non-linear data with few redundant variables or when redundancy doesn't matter.")
 
         with st.expander("Feature Importance",expanded=True):
-            chosen = selector(st.session_state['numeric_df'],'GROUP_ID',algo,cat_or_cont,remove,filter_contains)
+            chosen = selector(st.session_state['importance_df'],'GROUP_ID','Mutal Info','Categorical',remove)
             st.write(chosen[:int(num_features)])
+
+        group_cat_dict = {'File':'meta_vidID','Group':'GROUP_NAME'}
 
         visual_expander = st.sidebar.expander('Distribution Plots')
         vid_selection_violin = visual_expander.multiselect("Included Files",st.session_state['vid_list'],st.session_state['vid_list'],key='violin')
         # show_joint = visual_expander.checkbox('Show Joint Distribution',True)
         # joint_focus = visual_expander.selectbox('Joint Distribution Feature',st.session_state['features_list']) 
         # show_violin = visual_expander.checkbox('Show Violin Plots',True)
-        violin_focus = visual_expander.selectbox('Violin Plot Feature',st.session_state['features_no_meta']) 
-        violin_legend = visual_expander.checkbox('Split by File', True)
+        violin_focus = visual_expander.selectbox('Violin Plot Feature',st.session_state['features_no_meta'],index=27) 
+        primary_group = visual_expander.selectbox('Primary Category',['File','Group'],index=1,key='violin_primary')
+        violin_legend = visual_expander.checkbox('Split By Secondary Category', True)
         remove_outliers = visual_expander.checkbox('Remove Outliers', True)
         include_ungrouped = visual_expander.checkbox('Include Ungrouped Tracks',False)
         with st.expander('Distribution Plots',expanded=True):
             # if show_joint:
             #     joint_distribution(joint_focus,include_ungrouped,vid_selection)
             # if show_violin:
-            violin_plots(violin_focus,include_ungrouped,vid_selection_violin,violin_legend,remove_outliers)
+            violin_plots(violin_focus,include_ungrouped,vid_selection_violin,group_cat_dict[primary_group],violin_legend,remove_outliers)
         
         stat_expander = st.sidebar.expander('Statistical Test')
-        stat_test = stat_expander.selectbox("Test Type",['Boschloo (2 groups)'])
-        if stat_test == 'Boschloo (2 groups)':
+        stat_test = stat_expander.selectbox("Test Type",['Boschloo','Mann-Whitney'],index=1)
+        if stat_test == 'Boschloo':
             bosch_vid1 = stat_expander.selectbox('File #1',st.session_state['vid_list'],index=0)
             bosch_vid2 = stat_expander.selectbox('File #2',st.session_state['vid_list'],index=1)
             bosch_group1 = stat_expander.selectbox('Group #1',st.session_state['groups_dict'].values(),index=0)
             bosch_group2 = stat_expander.selectbox('Group #2',st.session_state['groups_dict'].values(),index=1)
-        if stat_expander.button('Run Test'):
-            if stat_test == 'Boschloo (2 groups)':
-                boschloos_test(bosch_vid1,bosch_vid2,bosch_group1,bosch_group2)
-                
-        if 'bosch_results' in st.session_state:
-            with st.expander("Statistical Test",expanded=True):
-                for result in st.session_state['bosch_results']:
+        if stat_test == 'Mann-Whitney':
+            dep_var = stat_expander.selectbox('Comparison Feature',st.session_state['features_no_meta'],index=27)
+            group_cat = stat_expander.selectbox('Category',['File','Group'],index=1)
+            if group_cat == 'File':
+                mw_group1 = stat_expander.selectbox('File #1',st.session_state['vid_list'],index=0)
+                mw_group2 = stat_expander.selectbox('File #2',st.session_state['vid_list'],index=1)
+            else:
+                mw_group1 = stat_expander.selectbox('Group #1',st.session_state['groups_dict'].values(),index=0)
+                mw_group2 = stat_expander.selectbox('Group #2',st.session_state['groups_dict'].values(),index=1)
+
+        with st.expander("Statistical Test", expanded = True):
+            if stat_test == 'Boschloo':
+                results = boschloos_test(bosch_vid1,bosch_vid2,bosch_group1,bosch_group2)
+                for result in results:
                     st.write(result)
+            if stat_test == 'Mann-Whitney':
+                results = mann_whitney(group_cat_dict[group_cat],mw_group1,mw_group2,dep_var)
+                for result in results:
+                    st.write(result)
+        # if stat_expander.button('Run Test'):
+        #     if stat_test == 'Boschloo (2 groups)':
+        #         boschloos_test(bosch_vid1,bosch_vid2,bosch_group1,bosch_group2)
+        # if 'bosch_results' in st.session_state:
+        #     with st.expander("Statistical Test",expanded=True):
+        #         for result in st.session_state['bosch_results']:
+        #             st.write(result)
         
 
 # ----------------------------------- Run the app -----------------------------------
@@ -598,8 +641,8 @@ PAGES[page]()
 # Kruskall Wallis for ordinal groups 
 # Remove nonsense fields (ID, index, etc)
 # Add optional button to remove geometric fields from feature importance (On by default) 
-# t-test for means between groups and between videos ***
-# Run all combinations of boschloo or implement pairwise selector 
+# Fix Feature Importance variables *** 
+
 
 
 # ---- GENERAL ----
